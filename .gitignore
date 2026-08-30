@@ -1,0 +1,48 @@
+# --- secrets and local machine paths ---
+*.env
+.env
+.env.*
+!.env.example
+bonsai.env
+infinity_brain.env
+
+# --- runtime state (not source) ---
+queenbee_memory.json
+nursery_state.json
+wading_pool.json
+*.save
+*Untitled*
+
+# --- editor / stray ---
+.vscode/
+.idea/
+=
+*.swp
+*~
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- local virtualenvs ---
+haseos-env/
+mesoflex-env/
+.venv/
+venv/
+env/
+
+# --- heavy local trees, never the source of truth ---
+models/
+llama.cpp/
+BitNet/
+data/
+exports/
+residuals/
+
+# --- workspace junk ---
+*.code-workspace
+uv.lock
