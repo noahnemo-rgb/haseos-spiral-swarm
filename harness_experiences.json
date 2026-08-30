@@ -1,0 +1,78 @@
+{
+  "schema": "haseos.experience.v1",
+  "owner": "haseos.spiral_harness",
+  "authority": "HITL / Light-Keeper",
+  "updated_at": "2026-08-23T22:52:23.568387",
+  "experience_seq": 7,
+  "count": 3,
+  "retention_cap": 40,
+  "note": "Harness lifecycle only. Does not write infant logs or a senior roster.",
+  "experiences": [
+    {
+      "id": "ex-harness-0001",
+      "timestamp": "2026-08-22T16:19:50.752635",
+      "task": "harness inspect queenbee.core",
+      "summary": "HITL inspected queenbee.core \u2014 honors 3/3 complete, 0 warning(s)",
+      "type": "harness_inspect",
+      "source": "/harness show",
+      "outcome": "honors complete",
+      "related": {
+        "module_id": "queenbee.core",
+        "honors": "3/3",
+        "warning_count": 0
+      },
+      "tags": [
+        "harness",
+        "inspect",
+        "hitl"
+      ],
+      "competence_delta": 0
+    },
+    {
+      "id": "ex-harness-0006",
+      "timestamp": "2026-08-23T22:23:32.027724",
+      "task": "harness inspect queenbee.core",
+      "summary": "HITL inspected queenbee.core \u2014 honors 3/3 complete, 0 warning(s)",
+      "type": "harness_inspect",
+      "source": "/harness show",
+      "outcome": "honors complete",
+      "related": {
+        "module_id": "queenbee.core",
+        "honors": "3/3",
+        "warning_count": 0,
+        "prior": "ex-harness-0005"
+      },
+      "tags": [
+        "harness",
+        "inspect",
+        "hitl"
+      ],
+      "competence_delta": 0
+    },
+    {
+      "id": "ex-harness-0007",
+      "timestamp": "2026-08-23T22:52:23.568359",
+      "task": "harness experiences prune",
+      "summary": "HITL pruned Harness log \u2014 removed 4, kept 2, mode=residual_cleanup_test_module",
+      "type": "harness_prune",
+      "source": "/residuals cleanup slice 024",
+      "outcome": "removed 4",
+      "related": {
+        "removed": 4,
+        "remaining": 2,
+        "mode": "residual_cleanup_test_module",
+        "keep_last": null,
+        "older_than_days": null,
+        "keep_types": [],
+        "force": false,
+        "prior": "ex-harness-0006"
+      },
+      "tags": [
+        "harness",
+        "prune",
+        "hitl"
+      ],
+      "competence_delta": 0
+    }
+  ]
+}
