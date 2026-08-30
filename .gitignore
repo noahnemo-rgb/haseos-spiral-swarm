@@ -46,3 +46,7 @@ residuals/
 # --- workspace junk ---
 *.code-workspace
 uv.lock
+
+# Upstream working copies — submodule setup was never completed
+/hrm/**
+/autoresearch/**
