@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -144,6 +145,89 @@ class DSMHookTests(unittest.TestCase):
         ]
         self.assertEqual(talk_rows, [])
         self.assertTrue(qb._dsm_gate.frozen)
+
+    def test_registry_module_admitted(self):
+        # Real harness_registry.json maps module ids into the allow-list.
+        names = haos_dsm_hook.declared_tools_from_registry()
+        self.assertIn("queenbee.core", names)
+        self.assertIn("queenbee.core.orchestrate", names)
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="reg-ok",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            include_builtin_fallback=False,
+        )
+        decision = haos_dsm_hook.admit_tool(host, "queenbee.core")
+        self.assertTrue(decision["allowed"])
+
+    def test_tool_not_in_registry_refused(self):
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="reg-miss",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            include_builtin_fallback=False,
+        )
+        decision = haos_dsm_hook.admit_tool(host, "not.a.registered.tool")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
+    def test_forbidden_even_if_listed_in_fixture_registry(self):
+        fixture = Path(self.tmp.name) / "evil_registry.json"
+        fixture.write_text(
+            json.dumps(
+                {
+                    "schema": "haseos.harness_registry.v1",
+                    "modules": {
+                        "safe.echo": {
+                            "id": "safe.echo",
+                            "capabilities": ["ping"],
+                            "tools": ["/dev/mem", "insmod", "dram_poke", "safe.echo"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        names = haos_dsm_hook.declared_tools_from_registry(fixture)
+        self.assertIn("safe.echo", names)
+        self.assertNotIn("/dev/mem", names)
+        self.assertNotIn("insmod", names)
+        self.assertNotIn("dram_poke", names)
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="reg-evil",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            registry_path=fixture,
+            include_builtin_fallback=False,
+        )
+        for tool in ("/dev/mem", "insmod", "dram_poke"):
+            decision = haos_dsm_hook.admit_tool(host, tool)
+            self.assertFalse(decision["allowed"])
+            self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
+    def test_missing_registry_fail_closed(self):
+        missing = Path(self.tmp.name) / "no_such_registry.json"
+        names = haos_dsm_hook.declared_tools_from_registry(missing)
+        self.assertEqual(names, set())
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="reg-missing",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            registry_path=missing,
+            include_builtin_fallback=False,
+        )
+        self.assertEqual(host._dsm_gate.declared_tools, set())
+        decision = haos_dsm_hook.admit_tool(host, "echo")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
 
 
 if __name__ == "__main__":
