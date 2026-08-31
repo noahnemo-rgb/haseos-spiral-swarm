@@ -50,3 +50,4 @@ uv.lock
 # Upstream working copies — submodule setup was never completed
 /hrm/**
 /autoresearch/**
+dsm_witness.jsonl

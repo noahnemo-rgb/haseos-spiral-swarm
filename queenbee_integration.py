@@ -20,6 +20,7 @@ from wading_pool import WADING_POOL, add_candidates, get_candidates, select_task
 import infinity_brain
 import usb_state
 import spiral_harness
+import haos_dsm_hook
 
 # HASEOS CONSTANTS — Ternary First, Always
 TERNARY_ALIGN = 1
@@ -105,6 +106,8 @@ class QueenBee:
         self.memory.setdefault("academy_candidates", [])
         self.memory.setdefault("cohorts", {})
         self.memory.setdefault("cohort_activity", {})
+        # DSM D2 — peer/tool gate (fail closed if later cleared). Secret from env only.
+        haos_dsm_hook.attach_gate(self)
         self._show_daily_greeting()
 
         print("✅ QueenBee re-aligned — v7.1 HTTP | Ternary First, Always")
@@ -2625,6 +2628,10 @@ class QueenBee:
         if not message:
             print("Usage: /talk [--talk] <from_id> <to_id> <message>")
             return
+        dsm = haos_dsm_hook.admit_peer_message(self, message)
+        if not dsm.get("allowed"):
+            haos_dsm_hook.refuse_message(dsm)
+            return
         prior = self._prior_pair_context(speaker, listener)
         print(f"\n💬 Pair talk  {speaker.get('id')} → {listener.get('id')}")
         if prior:
@@ -2696,6 +2703,10 @@ class QueenBee:
             f"{listener.get('id')} score={listener.get('competence_score', 0)}"
         )
 
+    def invoke_declared_tool(self, tool_name: str, runner=None):
+        """DSM-gated tool entry. Forbidden / undeclared tools never run."""
+        return haos_dsm_hook.run_tool_if_admitted(self, tool_name, runner=runner)
+
     def talk_cohort(self, name: str, from_id: str, message: str, talk: bool = False):
         cohorts = self.memory.setdefault("cohorts", {})
         if name not in cohorts:
@@ -2710,6 +2721,10 @@ class QueenBee:
         message = (message or "").strip()
         if not message:
             print("Usage: /talk [--talk] cohort <name> <from_id> <message>")
+            return
+        dsm = haos_dsm_hook.admit_peer_message(self, message)
+        if not dsm.get("allowed"):
+            haos_dsm_hook.refuse_message(dsm)
             return
         recipients = []
         skipped = []
