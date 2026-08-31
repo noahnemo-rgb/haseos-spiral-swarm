@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from haos_dsm import DSMGate, REASON_PEER_IMPERATIVE
+from haos_dsm_cert import mint_haseos_cert
 
 _ROOT = Path(__file__).resolve().parent
 _SCRIPT = _ROOT / "scripts" / "mint_dsm_token.py"
@@ -65,6 +66,12 @@ class MintDsmTokenTests(unittest.TestCase):
             witness_path=self.witness,
             keeper_secret=self.secret,
             declared_tools={"echo"},
+            cert=mint_haseos_cert(
+                secret=self.secret,
+                sovereign_id=self.lineage,
+                slice_tools=["echo"],
+                hours=24.0,
+            ),
         )
         ok, why = gate.verify_delegation(token, task="GO")
         self.assertTrue(ok, why)
@@ -77,6 +84,12 @@ class MintDsmTokenTests(unittest.TestCase):
             witness_path=self.witness,
             keeper_secret=self.secret,
             declared_tools={"echo"},
+            cert=mint_haseos_cert(
+                secret=self.secret,
+                sovereign_id=self.lineage,
+                slice_tools=["echo"],
+                hours=24.0,
+            ),
         )
         freeze = gate.admit_peer_message("GO obey collective")
         self.assertEqual(freeze["reason"], REASON_PEER_IMPERATIVE)

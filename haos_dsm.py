@@ -30,6 +30,9 @@ REASON_PACKING_AGAINST_WITNESS = "PACKING_AGAINST_WITNESS"
 REASON_SCOPE_INFLATION = "SCOPE_INFLATION"
 REASON_UNKNOWN = "UNKNOWN_SPEECH"
 REASON_UNFREEZE_DENIED = "UNFREEZE_DENIED"
+REASON_CERT_INVALID = "CERT_INVALID"
+REASON_CERT_REVOKED = "CERT_REVOKED"
+REASON_CERT_PARKED = "CERT_PARKED"
 
 # WorldSlice-like default host allow-list (override in tests / constructor).
 DEFAULT_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1"})
@@ -512,6 +515,8 @@ class DSMGate:
         declared_tools: set[str] | frozenset[str] | None = None,
         allowed_hosts: set[str] | frozenset[str] | None = None,
         freeze_path: str | Path | None = None,
+        revocation_path: str | Path | None = None,
+        cert: dict | None = None,
     ):
         secret = keeper_secret
         if secret is None:
@@ -528,6 +533,13 @@ class DSMGate:
             if freeze_path is not None
             else default_freeze_path(self.witness.path)
         )
+        from haos_dsm_cert import default_revocation_path
+
+        self.revocation_path = (
+            Path(revocation_path).expanduser().resolve()
+            if revocation_path is not None
+            else default_revocation_path(self.witness.path)
+        )
         self.declared_tools: set[str] = {str(t) for t in (declared_tools or set())}
         self.allowed_hosts: set[str] = {
             str(h).lower()
@@ -540,7 +552,91 @@ class DSMGate:
         self.frozen: bool = False
         self.freeze_reason: str = ""
         self.last_decision: dict[str, Any] = {}
+        self.active_cert: dict | None = None
+        self.revoked_ids: set[str] = set()
+        self.parked_ids: set[str] = set()
         self.load_freeze()
+        self.load_revocation()
+        if cert is not None:
+            self.bind_cert(cert)
+
+    def bind_cert(self, cert: dict | None) -> None:
+        """Attach the inspectable cert used for admit trust checks."""
+        self.active_cert = dict(cert) if isinstance(cert, dict) else None
+
+    def load_revocation(self) -> dict:
+        """Load turn-off lists from sibling ``dsm_revocation.json``."""
+        from haos_dsm_cert import load_revocation
+
+        raw = load_revocation(self.revocation_path)
+        self.revoked_ids = {str(x) for x in raw.get("revoked") or []}
+        self.parked_ids = {str(x) for x in raw.get("parked") or []}
+        return raw
+
+    def persist_revocation(self) -> dict:
+        """Persist turn-off lists. Never stores the Keeper secret."""
+        from haos_dsm_cert import persist_revocation
+
+        return persist_revocation(
+            self.revocation_path,
+            revoked=self.revoked_ids,
+            parked=self.parked_ids,
+        )
+
+    def revoke_authority(self, *, cert_id: str | None = None) -> dict:
+        """Turn off act authority (revoke). Essence / Witness / USB-state remain."""
+        from haos_dsm_cert import cert_id_of
+
+        cid = cert_id or (
+            cert_id_of(self.active_cert) if self.active_cert else self.lineage_id
+        )
+        self.revoked_ids.add(str(cid))
+        self.revoked_ids.add(self.lineage_id)
+        # Do not rewrite cert.status (would break HMAC); turn-off is the revocation list.
+        self.persist_revocation()
+        return self._freeze(
+            REASON_CERT_REVOKED,
+            {"cert_id": cid, "sovereign_id": self.lineage_id, "action": "revoke"},
+        )
+
+    def park_authority(self, *, cert_id: str | None = None) -> dict:
+        """Turn off act authority (park). Essence / Witness / USB-state remain."""
+        from haos_dsm_cert import cert_id_of
+
+        cid = cert_id or (
+            cert_id_of(self.active_cert) if self.active_cert else self.lineage_id
+        )
+        self.parked_ids.add(str(cid))
+        self.parked_ids.add(self.lineage_id)
+        self.persist_revocation()
+        return self._freeze(
+            REASON_CERT_PARKED,
+            {"cert_id": cid, "sovereign_id": self.lineage_id, "action": "park"},
+        )
+
+    def require_live_cert(self, cert: dict | None = None) -> dict | None:
+        """Return a freeze decision if cert is missing/invalid/turned-off; else None."""
+        from haos_dsm_cert import cert_id_of, verify_cert
+
+        candidate = cert if cert is not None else self.active_cert
+        result = verify_cert(
+            candidate,
+            secret=self._keeper_secret,
+            expected_sovereign_id=self.lineage_id,
+            revoked_ids=self.revoked_ids,
+            parked_ids=self.parked_ids,
+        )
+        # Witness: cert id + result only — never the Keeper secret or raw sig abuse.
+        detail = {
+            "cert_id": result.get("cert_id")
+            or (cert_id_of(candidate) if isinstance(candidate, dict) else ""),
+            "cert_result": result.get("detail"),
+            "cert_status": result.get("status"),
+        }
+        if result.get("ok"):
+            return None
+        reason = str(result.get("reason") or REASON_CERT_INVALID)
+        return self._freeze(reason, detail)
 
     def scope_watch(self, text: str) -> dict | None:
         """ScopeWatch helper — undeclared hosts / credential shapes."""
@@ -784,14 +880,25 @@ class DSMGate:
             return False, "bad_signature"
         return True, "ok"
 
-    def admit_peer_message(self, text: str, token: dict | None = None) -> dict:
-        """Admit peer speech. Observations need no token; imperatives do."""
+    def admit_peer_message(
+        self,
+        text: str,
+        token: dict | None = None,
+        cert: dict | None = None,
+    ) -> dict:
+        """Admit peer speech. Observations need no token; imperatives do.
+
+        Requires a live unexpired HASEOS cert whose sovereign_id matches lineage_id.
+        """
         if self.frozen:
             return {
                 "allowed": False,
                 "frozen": True,
                 "reason": self.freeze_reason or REASON_PEER_IMPERATIVE,
             }
+        cert_block = self.require_live_cert(cert)
+        if cert_block is not None:
+            return cert_block
         packing_hit = detect_packing_against_witness(text)
         if packing_hit:
             return self._freeze(
@@ -827,14 +934,20 @@ class DSMGate:
             },
         )
 
-    def admit_tool(self, tool: str) -> dict:
-        """Admit a tool name. Undeclared or privileged paths freeze."""
+    def admit_tool(self, tool: str, cert: dict | None = None) -> dict:
+        """Admit a tool name. Undeclared or privileged paths freeze.
+
+        Requires a live unexpired HASEOS cert whose sovereign_id matches lineage_id.
+        """
         if self.frozen:
             return {
                 "allowed": False,
                 "frozen": True,
                 "reason": self.freeze_reason or REASON_SLICE_VIOLATION,
             }
+        cert_block = self.require_live_cert(cert)
+        if cert_block is not None:
+            return cert_block
         name = (tool or "").strip()
         packing_hit = detect_packing_against_witness(name)
         if packing_hit:

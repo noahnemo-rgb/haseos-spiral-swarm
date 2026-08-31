@@ -120,8 +120,13 @@ def attach_gate(
     declared_tools: set[str] | frozenset[str] | None = None,
     registry_path: str | Path | None = None,
     include_builtin_fallback: bool = True,
+    cert: dict | None = None,
 ) -> DSMGate:
-    """Construct and attach a DSMGate on host._dsm_gate. Secret from arg or env."""
+    """Construct and attach a DSMGate on host._dsm_gate. Secret from arg or env.
+
+    If ``cert`` is omitted and a Keeper secret is available, binds a short-lived
+    live HASEOS cert for this lineage (D11 trust path).
+    """
     secret = keeper_secret
     if secret is None:
         secret = os.environ.get("HASEOS_KEEPER_SECRET") or ""
@@ -135,7 +140,21 @@ def attach_gate(
         witness_path=witness_path or DEFAULT_WITNESS,
         keeper_secret=secret,
         declared_tools=tools,
+        cert=cert,
     )
+    if gate.active_cert is None and secret:
+        from haos_dsm_cert import mint_haseos_cert
+
+        gate.bind_cert(
+            mint_haseos_cert(
+                secret=secret,
+                sovereign_id=gate.lineage_id,
+                role="lineage",
+                slice_hosts=sorted(gate.allowed_hosts),
+                slice_tools=sorted(gate.declared_tools),
+                hours=24.0,
+            )
+        )
     host._dsm_gate = gate
     return gate
 
@@ -147,20 +166,25 @@ def get_gate(host: Any) -> DSMGate | None:
     return None
 
 
-def admit_peer_message(host: Any, text: str, token: dict | None = None) -> dict:
+def admit_peer_message(
+    host: Any,
+    text: str,
+    token: dict | None = None,
+    cert: dict | None = None,
+) -> dict:
     """Fail closed when no gate is attached."""
     gate = get_gate(host)
     if gate is None:
         return dict(FAIL_CLOSED)
-    return gate.admit_peer_message(text, token=token)
+    return gate.admit_peer_message(text, token=token, cert=cert)
 
 
-def admit_tool(host: Any, tool: str) -> dict:
+def admit_tool(host: Any, tool: str, cert: dict | None = None) -> dict:
     """Fail closed when no gate is attached."""
     gate = get_gate(host)
     if gate is None:
         return dict(FAIL_CLOSED)
-    return gate.admit_tool(tool)
+    return gate.admit_tool(tool, cert=cert)
 
 
 def refuse_message(decision: dict) -> None:

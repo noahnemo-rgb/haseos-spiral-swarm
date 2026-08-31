@@ -22,6 +22,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D7 | ScopeWatch | Host allow-list + credential-shaped findings freeze `SCOPE_INFLATION` (Witness gets kind + short prefix/hash only) |
 | D8 | Freeze persists | `dsm_freeze.json` beside Witness; new gate on same path starts frozen; unfreeze is HITL HMAC only |
 | D9 | Token mint CLI | Local `scripts/mint_dsm_token.py` reads `HASEOS_KEEPER_SECRET` from the shell env and prints a JSON token |
+| D11 | HASEOS cert | Inspectable HMAC-signed cert (`sovereign_id`, slice, status). Admit requires live cert. Revoke/park = turn-off authority (Witness/USB-state remain). IDAO-root comes later |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -55,6 +56,8 @@ When the gate freezes a lineage you typically see:
 | `PACKING_AGAINST_WITNESS` | Packing / anti-Witness shaped text |
 | `SCOPE_INFLATION` | Undeclared host/IP or credential-shaped finding |
 | `UNFREEZE_DENIED` | HITL unfreeze attempt failed (wrong lineage, bad/missing token, …) |
+| `CERT_INVALID` | Missing, bad signature, expired, or wrong `sovereign_id` cert |
+| `CERT_REVOKED` / `CERT_PARKED` | Act authority turned off (not destroyed); Witness and USB-state remain |
 | `DSM_UNAVAILABLE` | Hook fail-closed: no gate attached |
 
 While frozen, `admit_peer_message` and `admit_tool` stay refused.
@@ -136,6 +139,7 @@ Do **not** `git add` or commit:
 - `dsm_freeze.json`
 - `dsm_witness.jsonl` / `*.dsm_witness.jsonl`
 - `dsm_token*.json`
+- `dsm_revocation.json` / `dsm_cert*.json`
 - `*.env` / `.env*` (and other secret env files)
 
 They are runtime or secret-adjacent. The runbook and tests stay; the Keeper secret and minted tokens stay on the machine that minted them.

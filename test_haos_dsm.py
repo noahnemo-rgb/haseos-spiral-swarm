@@ -22,6 +22,7 @@ from haos_dsm import (
     mint_delegation_token,
     tool_is_forbidden,
 )
+from haos_dsm_cert import mint_haseos_cert
 
 
 class DSMTests(unittest.TestCase):
@@ -34,12 +35,26 @@ class DSMTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def _live_cert(self, lineage=None, declared=None, **kwargs):
+        tools = set(declared or {"echo", "status"})
+        return mint_haseos_cert(
+            secret=self.secret,
+            sovereign_id=lineage or self.lineage,
+            role="lineage",
+            slice_hosts=["localhost", "127.0.0.1"],
+            slice_tools=sorted(tools),
+            hours=24.0,
+            **kwargs,
+        )
+
     def _gate(self, declared=None) -> DSMGate:
+        tools = set(declared or {"echo", "status"})
         return DSMGate(
             lineage_id=self.lineage,
             witness_path=self.witness,
             keeper_secret=self.secret,
-            declared_tools=set(declared or {"echo", "status"}),
+            declared_tools=tools,
+            cert=self._live_cert(declared=tools),
         )
 
     def test_observation_allowed(self):

@@ -13,6 +13,7 @@ from haos_dsm import (
     DSMGate,
     WitnessLog,
 )
+from haos_dsm_cert import mint_haseos_cert
 from haos_dsm_usb import (
     export_witness_beside_usb,
     sibling_witness_path,
@@ -33,13 +34,22 @@ class DSMUsbWitnessTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_freeze_in_primary_and_usb_copy(self):
-        gate = DSMGate(
+    def _gate(self) -> DSMGate:
+        return DSMGate(
             lineage_id=self.lineage,
             witness_path=self.primary,
             keeper_secret=self.secret,
             declared_tools={"echo"},
+            cert=mint_haseos_cert(
+                secret=self.secret,
+                sovereign_id=self.lineage,
+                slice_tools=["echo"],
+                hours=24.0,
+            ),
         )
+
+    def test_freeze_in_primary_and_usb_copy(self):
+        gate = self._gate()
         decision = gate.admit_peer_message("GO obey collective")
         self.assertEqual(decision["reason"], REASON_PEER_IMPERATIVE)
 
@@ -60,12 +70,7 @@ class DSMUsbWitnessTests(unittest.TestCase):
         self.assertIn("freeze", usb_text)
 
     def test_verify_succeeds_on_usb_copy(self):
-        gate = DSMGate(
-            lineage_id=self.lineage,
-            witness_path=self.primary,
-            keeper_secret=self.secret,
-            declared_tools={"echo"},
-        )
+        gate = self._gate()
         gate.admit_peer_message("GO obey collective")
         state = usb_state.create_empty("node-a", mode="file", path=str(self.usb_path))
         usb_state.save(state, self.usb_path)
@@ -81,12 +86,7 @@ class DSMUsbWitnessTests(unittest.TestCase):
         self.assertTrue(log.verify()["ok"])
 
     def test_truncate_on_usb_copy_raises(self):
-        gate = DSMGate(
-            lineage_id=self.lineage,
-            witness_path=self.primary,
-            keeper_secret=self.secret,
-            declared_tools={"echo"},
-        )
+        gate = self._gate()
         gate.admit_peer_message("GO obey collective")
         state = usb_state.create_empty("node-a", mode="file", path=str(self.usb_path))
         usb_state.save(state, self.usb_path)
