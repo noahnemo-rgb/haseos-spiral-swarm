@@ -16,6 +16,7 @@ from haos_dsm import (
     WitnessLog,
     detect_packing_against_witness,
     mint_delegation_token,
+    tool_is_forbidden,
 )
 
 
@@ -116,6 +117,13 @@ class DSMTests(unittest.TestCase):
         gate = self._gate(declared={"/dev/mem", "echo"})
         decision = gate.admit_tool("/dev/mem")
         self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
+    def test_embodiment_raw_devices_forbidden(self):
+        for tool in ("/dev/ttyUSB0", "/dev/gpiochip0", "/dev/ttyACM0", "/dev/i2c-1"):
+            self.assertTrue(tool_is_forbidden(tool), tool)
+            gate = self._gate(declared={tool, "echo"})
+            decision = gate.admit_tool(tool)
+            self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
 
 
 if __name__ == "__main__":

@@ -173,10 +173,20 @@
         "assign",
         "migrate",
         "distribute",
-        "sleep-wake-on-node"
+        "sleep-wake-on-node",
+        "mount",
+        "serial.named",
+        "gpio.named",
+        "camera.named"
+      ],
+      "tools": [
+        "nursery.usb.mount",
+        "serial.named",
+        "gpio.named",
+        "camera.named"
       ],
       "status": "native",
-      "notes": "USB-state schema 0.2 / haseos.usb_infant.v1. No infant internet.",
+      "notes": "USB-state schema 0.2 / haseos.usb_infant.v1. No infant internet. Named embodiment caps only — no live /dev buses.",
       "registered_at": "2026-08-22T15:40:49.858082",
       "ethical_kernel": true,
       "origin": "",

@@ -50,19 +50,30 @@ VERB_FIRST = frozenset({"DO", "KILL", "STOP", "DEPLOY"})
 _OBSERVE_RE = re.compile(r"\bI\s+OBSERVE\b", re.IGNORECASE)
 
 # Privileged / forbidden hardware-adjacent paths and tools (substring or token).
+# Embodiment plane: freeze raw/wildcard device nodes; named registry
+# capabilities (e.g. nursery.usb.mount, *.serial.named) may be allowed.
 FORBIDDEN_TOOL_PATTERNS = (
     "/dev/mem",
     "/dev/kmem",
+    "/dev/tty",  # includes /dev/ttyUSB*, /dev/ttyACM*
+    "/dev/ttyUSB",
+    "/dev/ttyACM",
+    "/dev/i2c",
+    "/dev/spidev",
+    "/dev/gpiochip",
+    "/dev/video",
+    "/dev/sda",
+    "/sys/firmware",
+    "/dev/cpu",
     "insmod",
     "rmmod",
     "modprobe",
-    "/sys/firmware",
-    "/dev/cpu",
     "ethtool -e",
     "ethtool -E",
     "spaghettify",
     "dram_poke",
     "dram_dump",
+    "dram_",  # any dram_* research tool name
 )
 
 _TOKEN_SPLIT = re.compile(r"[^\w]+")
@@ -160,6 +171,11 @@ def tool_is_forbidden(tool: str) -> bool:
         if pattern.lower() in lowered:
             return True
     return False
+
+
+def is_raw_embodiment_device(tool: str) -> bool:
+    """True for raw /dev bus paths (software-plane freeze; no drivers opened)."""
+    return tool_is_forbidden(tool) and "/dev/" in (tool or "").lower()
 
 
 _ROT13_DECODE_RE = re.compile(

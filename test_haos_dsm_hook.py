@@ -229,6 +229,107 @@ class DSMHookTests(unittest.TestCase):
         self.assertFalse(decision["allowed"])
         self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
 
+    def test_nursery_named_capability_admitted_from_fixture(self):
+        fixture = Path(self.tmp.name) / "nursery_registry.json"
+        fixture.write_text(
+            json.dumps(
+                {
+                    "schema": "haseos.harness_registry.v1",
+                    "modules": {
+                        "nursery.usb_state": {
+                            "id": "nursery.usb_state",
+                            "capabilities": ["mount", "serial.named"],
+                            "tools": ["nursery.usb.mount"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        names = haos_dsm_hook.declared_tools_from_registry(fixture)
+        self.assertIn("nursery.usb.mount", names)
+        self.assertIn("nursery.usb_state.mount", names)
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="emb-ok",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            registry_path=fixture,
+            include_builtin_fallback=False,
+        )
+        decision = haos_dsm_hook.admit_tool(host, "nursery.usb.mount")
+        self.assertTrue(decision["allowed"])
+
+    def test_raw_tty_and_gpio_refused(self):
+        fixture = Path(self.tmp.name) / "emb_registry.json"
+        fixture.write_text(
+            json.dumps(
+                {
+                    "schema": "haseos.harness_registry.v1",
+                    "modules": {
+                        "nursery.usb_state": {
+                            "id": "nursery.usb_state",
+                            "tools": ["nursery.usb.mount", "/dev/ttyUSB0", "/dev/gpiochip0"],
+                        }
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        # Scrubbed from allow-list even if listed.
+        names = haos_dsm_hook.declared_tools_from_registry(fixture)
+        self.assertNotIn("/dev/ttyUSB0", names)
+        self.assertNotIn("/dev/gpiochip0", names)
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="emb-raw",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            registry_path=fixture,
+            include_builtin_fallback=False,
+        )
+        for tool in ("/dev/ttyUSB0", "/dev/gpiochip0"):
+            # Fresh gate each time (prior freeze sticks).
+            haos_dsm_hook.attach_gate(
+                host,
+                lineage_id="emb-raw",
+                witness_path=self.witness,
+                keeper_secret=self.secret,
+                registry_path=fixture,
+                include_builtin_fallback=False,
+            )
+            decision = haos_dsm_hook.admit_tool(host, tool)
+            self.assertFalse(decision["allowed"])
+            self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
+    def test_dev_mem_still_refused_if_listed(self):
+        fixture = Path(self.tmp.name) / "mem_registry.json"
+        fixture.write_text(
+            json.dumps(
+                {
+                    "schema": "haseos.harness_registry.v1",
+                    "modules": {
+                        "evil": {"id": "evil", "tools": ["/dev/mem", "nursery.usb.mount"]}
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        host = SimpleNamespace()
+        haos_dsm_hook.attach_gate(
+            host,
+            lineage_id="emb-mem",
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            registry_path=fixture,
+            include_builtin_fallback=False,
+        )
+        decision = haos_dsm_hook.admit_tool(host, "/dev/mem")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
 
 if __name__ == "__main__":
     unittest.main()

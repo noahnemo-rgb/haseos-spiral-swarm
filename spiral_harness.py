@@ -271,7 +271,22 @@ CORE_MODULES = (
         "airgap_respecting": True,
         "hitl_gated": True,
         "plain_structures": True,
-        "capabilities": ["assign", "migrate", "distribute", "sleep-wake-on-node"],
+        "capabilities": [
+            "assign",
+            "migrate",
+            "distribute",
+            "sleep-wake-on-node",
+            "mount",
+            "serial.named",
+            "gpio.named",
+            "camera.named",
+        ],
+        "tools": [
+            "nursery.usb.mount",
+            "serial.named",
+            "gpio.named",
+            "camera.named",
+        ],
         "status": "native",
         "notes": "USB-state schema 0.2 / haseos.usb_infant.v1. No infant internet.",
         "honors": {
