@@ -258,6 +258,18 @@ def save(state: dict, path: str | Path) -> dict:
     if problems:
         raise ValueError("cannot save invalid USB-state: " + "; ".join(problems))
     dest.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # DSM D5 — Witness copy beside the image (skip if no primary Witness yet).
+    try:
+        from haos_dsm_usb import annotate_and_export_witness
+
+        export_info = annotate_and_export_witness(state, dest)
+        if export_info.get("status") == "exported" and isinstance(state.get("notes"), dict):
+            touch(state)
+            dest.write_text(
+                json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+    except ImportError:
+        pass
     return state
 
 

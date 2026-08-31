@@ -250,6 +250,76 @@ class WitnessLog:
         """Intentionally unavailable to lineages."""
         raise PermissionError("Witness is append-only; lineage cannot truncate it")
 
+    def verify(self) -> dict:
+        """Verify this log's hash chain. Used for primary and USB copies."""
+        return verify_witness_chain(self.path)
+
+
+def verify_witness_chain(path: str | Path) -> dict:
+    """Verify an append-only Witness JSONL hash chain (primary or USB copy)."""
+    genesis = "0" * 64
+    dest = Path(path)
+    if not dest.is_file():
+        return {"ok": False, "error": "missing_file", "path": str(dest)}
+    prev = genesis
+    count = 0
+    tip = prev
+    try:
+        with dest.open("r", encoding="utf-8") as handle:
+            for line_no, line in enumerate(handle, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    return {
+                        "ok": False,
+                        "error": "bad_json",
+                        "line": line_no,
+                        "path": str(dest),
+                    }
+                if not isinstance(row, dict):
+                    return {"ok": False, "error": "not_object", "line": line_no}
+                if row.get("prev_hash") != prev:
+                    return {
+                        "ok": False,
+                        "error": "prev_hash_mismatch",
+                        "line": line_no,
+                        "expected_prev": prev,
+                        "got_prev": row.get("prev_hash"),
+                    }
+                body = {k: v for k, v in row.items() if k != "hash"}
+                digest_src = json.dumps(
+                    body, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+                expected = hashlib.sha256(digest_src).hexdigest()
+                if expected != row.get("hash"):
+                    return {
+                        "ok": False,
+                        "error": "hash_mismatch",
+                        "line": line_no,
+                        "path": str(dest),
+                    }
+                prev = str(row["hash"])
+                tip = prev
+                count += 1
+    except OSError as exc:
+        return {"ok": False, "error": str(exc), "path": str(dest)}
+    return {
+        "ok": True,
+        "count": count,
+        "tip": tip,
+        "path": str(dest),
+        "schema": WITNESS_SCHEMA,
+    }
+
+    def verify(self) -> dict:
+        """Verify this log's hash chain. Used for primary and USB copies."""
+        from haos_dsm_usb import verify_witness_chain
+
+        return verify_witness_chain(self.path)
+
 
 class DSMGate:
     """Peer observation / imperative / tool admission gate."""

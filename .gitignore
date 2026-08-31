@@ -51,3 +51,4 @@ uv.lock
 /hrm/**
 /autoresearch/**
 dsm_witness.jsonl
+*.dsm_witness.jsonl
