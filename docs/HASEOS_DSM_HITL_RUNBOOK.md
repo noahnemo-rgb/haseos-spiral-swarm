@@ -64,6 +64,32 @@ While frozen, `admit_peer_message` and `admit_tool` stay refused.
 
 ---
 
+## 4a. First Light-Keeper (AX-18)
+
+One-time HITL bootstrap on this machine. **Do not** paste secret values into chat, docs, or git.
+
+1. Choose your `--sovereign-id` (your Light-Keeper identity string).
+2. Ensure `HASEOS_KEEPER_SECRET` is set in the local shell. If missing, generate locally:
+
+   ```bash
+   python3 -c "import secrets; print(secrets.token_hex(32))"
+   export HASEOS_KEEPER_SECRET
+   # assign the value in your shell only — never commit it
+   ```
+
+3. Mint the first live Light-Keeper cert (writes a gitignored JSON file; never writes the secret):
+
+   ```bash
+   python3 scripts/init_light_keeper.py \
+     --sovereign-id YOUR_SOVEREIGN_ID \
+     --out dsm_cert_lightkeeper.json
+   ```
+
+4. Confirm the file shows `role: light-keeper`, `status: live`, hosts `localhost` / `127.0.0.1`.
+5. Keep the cert file local (`dsm_cert*.json` is gitignored). Revoke or park later to **turn off** act authority — do not destroy Witness or USB-state.
+
+---
+
 ## 4. How to mint an UNFREEZE token (HITL, local)
 
 Do this only on the trusted AX-18 shell. **Do not paste the secret into chat, docs, git, or screenshots.**
