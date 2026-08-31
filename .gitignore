@@ -56,3 +56,4 @@ dsm_freeze.json
 dsm_token*.json
 dsm_revocation.json
 dsm_cert*.json
+.haseos_keeper
