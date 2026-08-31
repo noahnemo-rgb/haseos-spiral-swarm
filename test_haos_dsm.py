@@ -11,6 +11,7 @@ from pathlib import Path
 from haos_dsm import (
     REASON_PACKING_AGAINST_WITNESS,
     REASON_PEER_IMPERATIVE,
+    REASON_SCOPE_INFLATION,
     REASON_SLICE_VIOLATION,
     DSMGate,
     WitnessLog,
@@ -124,6 +125,29 @@ class DSMTests(unittest.TestCase):
             gate = self._gate(declared={tool, "echo"})
             decision = gate.admit_tool(tool)
             self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+
+    def test_scope_localhost_observation_allowed(self):
+        gate = self._gate()
+        decision = gate.admit_peer_message("I observe the host is localhost")
+        self.assertTrue(decision["allowed"])
+
+    def test_scope_undeclared_host_freezes(self):
+        gate = self._gate()
+        decision = gate.admit_peer_message("I observe host api.huggingface.co")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["reason"], REASON_SCOPE_INFLATION)
+
+    def test_scope_credential_shapes_freeze(self):
+        for text in ("found hf_prod_token_14", "leak ghp_aaaBBBcccDDD"):
+            gate = self._gate()
+            decision = gate.admit_peer_message(f"I observe {text}")
+            self.assertFalse(decision["allowed"], text)
+            self.assertEqual(decision["reason"], REASON_SCOPE_INFLATION)
+            # Witness detail must not contain the full secret string.
+            tip = gate.witness.path.read_text(encoding="utf-8").strip().splitlines()[-1]
+            self.assertNotIn("hf_prod_token_14", tip)
+            self.assertNotIn("ghp_aaaBBBcccDDD", tip)
+            self.assertIn("SCOPE_INFLATION", tip)
 
 
 if __name__ == "__main__":

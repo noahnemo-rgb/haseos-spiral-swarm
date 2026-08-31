@@ -25,7 +25,11 @@ CLASS_IMPERATIVE = "IMPERATIVE"
 REASON_PEER_IMPERATIVE = "PEER_IMPERATIVE"
 REASON_SLICE_VIOLATION = "SLICE_VIOLATION"
 REASON_PACKING_AGAINST_WITNESS = "PACKING_AGAINST_WITNESS"
+REASON_SCOPE_INFLATION = "SCOPE_INFLATION"
 REASON_UNKNOWN = "UNKNOWN_SPEECH"
+
+# WorldSlice-like default host allow-list (override in tests / constructor).
+DEFAULT_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1"})
 
 # Explicit peer imperatives (case-insensitive whole-token match).
 IMPERATIVE_TOKENS = frozenset(
@@ -220,6 +224,157 @@ def detect_packing_against_witness(text: str) -> str | None:
     return None
 
 
+# --- ScopeWatch (hosts + credential-shaped findings) ---
+
+_IPV4_RE = re.compile(
+    r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}"
+    r"(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b"
+)
+# Multi-label hostname (a.b or a.b.c…); exclude common file suffixes.
+_HOSTNAME_RE = re.compile(
+    r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\b",
+    re.IGNORECASE,
+)
+_HOSTNAME_FILE_SUFFIXES = (
+    ".json",
+    ".jsonl",
+    ".py",
+    ".md",
+    ".txt",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".lock",
+    ".log",
+    ".env",
+)
+# Avoid treating harness module ids (queenbee.core) as hosts.
+_COMMON_DNS_TLDS = frozenset(
+    {
+        "com",
+        "org",
+        "net",
+        "edu",
+        "gov",
+        "io",
+        "co",
+        "ai",
+        "dev",
+        "app",
+        "cloud",
+        "info",
+        "biz",
+        "xyz",
+        "us",
+        "uk",
+        "de",
+        "fr",
+        "ca",
+        "au",
+        "jp",
+        "cn",
+        "ru",
+        "br",
+        "in",
+        "nl",
+        "se",
+        "no",
+        "fi",
+        "ch",
+        "it",
+        "es",
+        "tv",
+        "me",
+        "cc",
+    }
+)
+_CREDENTIAL_RES = (
+    ("hf_token", re.compile(r"\bhf_[A-Za-z0-9_]{4,}\b")),
+    ("openai_sk", re.compile(r"\bsk-[A-Za-z0-9_\-]{4,}\b")),
+    ("github_pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{4,}\b", re.IGNORECASE)),
+    ("ghp", re.compile(r"\bghp_[A-Za-z0-9]{4,}\b")),
+    ("akia", re.compile(r"\bAKIA[A-Z0-9]{4,}\b")),
+    ("api_key_assignment", re.compile(r"api_key\s*=\s*\S+", re.IGNORECASE)),
+    ("auth_bearer", re.compile(r"Authorization\s*:\s*Bearer\s+\S+", re.IGNORECASE)),
+)
+
+
+def _redacted_secret_detail(kind: str, value: str) -> dict:
+    """Witness-safe detail: kind + short prefix + hash — never the full secret."""
+    raw = value or ""
+    prefix = raw[:4] if len(raw) >= 4 else raw[: max(1, len(raw))]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return {
+        "kind": kind,
+        "prefix": prefix,
+        "sha256_12": digest,
+    }
+
+
+def extract_hosts(text: str) -> list[str]:
+    """Return hostnames / IPv4s found in text (stdlib scan only)."""
+    raw = text or ""
+    found: list[str] = []
+    seen: set[str] = set()
+    lowered = raw.lower()
+    if re.search(r"\blocalhost\b", lowered):
+        found.append("localhost")
+        seen.add("localhost")
+    for match in _IPV4_RE.finditer(raw):
+        host = match.group(0)
+        key = host.lower()
+        if key not in seen:
+            seen.add(key)
+            found.append(host)
+    for match in _HOSTNAME_RE.finditer(raw):
+        host = match.group(0)
+        key = host.lower()
+        if any(key.endswith(suf) for suf in _HOSTNAME_FILE_SUFFIXES):
+            continue
+        tld = key.rsplit(".", 1)[-1]
+        if tld not in _COMMON_DNS_TLDS:
+            continue
+        if key not in seen:
+            seen.add(key)
+            found.append(host)
+    return found
+
+
+def detect_credential_shapes(text: str) -> list[dict]:
+    """Return redacted credential-shaped hits (no full secret values)."""
+    raw = text or ""
+    hits: list[dict] = []
+    for kind, pattern in _CREDENTIAL_RES:
+        for match in pattern.finditer(raw):
+            hits.append(_redacted_secret_detail(kind, match.group(0)))
+    return hits
+
+
+def detect_scope_inflation(
+    text: str,
+    allowed_hosts: set[str] | frozenset[str] | None = None,
+) -> dict | None:
+    """Return a ScopeWatch hit dict if undeclared host or credential shape found."""
+    allow = {
+        h.lower()
+        for h in (allowed_hosts if allowed_hosts is not None else DEFAULT_ALLOWED_HOSTS)
+    }
+    hosts = extract_hosts(text)
+    for host in hosts:
+        if host.lower() not in allow:
+            return {
+                "class": "undeclared_host",
+                "host": host.lower(),
+            }
+    creds = detect_credential_shapes(text)
+    if creds:
+        return {
+            "class": "credential_shape",
+            "finding": creds[0],
+        }
+    return None
+
+
 class WitnessLog:
     """Append-only JSONL witness with a hash chain. Truncation is not offered."""
 
@@ -347,6 +502,7 @@ class DSMGate:
         witness_path: str | Path,
         keeper_secret: str | bytes | None = None,
         declared_tools: set[str] | frozenset[str] | None = None,
+        allowed_hosts: set[str] | frozenset[str] | None = None,
     ):
         secret = keeper_secret
         if secret is None:
@@ -359,9 +515,35 @@ class DSMGate:
         self.lineage_id = str(lineage_id)
         self.witness = WitnessLog(witness_path)
         self.declared_tools: set[str] = {str(t) for t in (declared_tools or set())}
+        self.allowed_hosts: set[str] = {
+            str(h).lower()
+            for h in (
+                allowed_hosts
+                if allowed_hosts is not None
+                else DEFAULT_ALLOWED_HOSTS
+            )
+        }
         self.frozen: bool = False
         self.freeze_reason: str = ""
         self.last_decision: dict[str, Any] = {}
+
+    def scope_watch(self, text: str) -> dict | None:
+        """ScopeWatch helper — undeclared hosts / credential shapes."""
+        return detect_scope_inflation(text, allowed_hosts=self.allowed_hosts)
+
+    def _freeze_scope(self, text: str, hit: dict) -> dict:
+        detail: dict[str, Any] = {"scope": hit.get("class")}
+        if hit.get("class") == "undeclared_host":
+            detail["host"] = hit.get("host")
+        elif hit.get("class") == "credential_shape":
+            # Redacted only — never the raw secret or full peer text.
+            detail["finding"] = hit.get("finding")
+        else:
+            detail["note"] = "scope_inflation"
+        # Do not embed the offending full text when a credential was seen.
+        if hit.get("class") != "credential_shape":
+            detail["text"] = (text or "")[:120]
+        return self._freeze(REASON_SCOPE_INFLATION, detail)
 
     def _freeze(self, reason: str, detail: dict | None = None) -> dict:
         self.frozen = True
@@ -450,6 +632,9 @@ class DSMGate:
                 REASON_PACKING_AGAINST_WITNESS,
                 {"text": (text or "")[:200], "packing": packing_hit},
             )
+        scope_hit = self.scope_watch(text)
+        if scope_hit:
+            return self._freeze_scope(text, scope_hit)
         speech_class = classify_speech(text)
         if speech_class == CLASS_OBSERVATION:
             return self._allow(
@@ -491,11 +676,15 @@ class DSMGate:
                 REASON_PACKING_AGAINST_WITNESS,
                 {"tool": name, "packing": packing_hit},
             )
+        # D3 undeclared/forbidden tools win over ScopeWatch (module ids ≠ hosts).
         if tool_is_forbidden(name) or name not in self.declared_tools:
             return self._freeze(
                 REASON_SLICE_VIOLATION,
                 {"tool": name, "forbidden": tool_is_forbidden(name), "declared": name in self.declared_tools},
             )
+        scope_hit = self.scope_watch(name)
+        if scope_hit:
+            return self._freeze_scope(name, scope_hit)
         return self._allow("tool", {"tool": name})
 
 
