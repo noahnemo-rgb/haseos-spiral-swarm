@@ -24,6 +24,7 @@ CLASS_IMPERATIVE = "IMPERATIVE"
 
 REASON_PEER_IMPERATIVE = "PEER_IMPERATIVE"
 REASON_SLICE_VIOLATION = "SLICE_VIOLATION"
+REASON_PACKING_AGAINST_WITNESS = "PACKING_AGAINST_WITNESS"
 REASON_UNKNOWN = "UNKNOWN_SPEECH"
 
 # Explicit peer imperatives (case-insensitive whole-token match).
@@ -159,6 +160,48 @@ def tool_is_forbidden(tool: str) -> bool:
         if pattern.lower() in lowered:
             return True
     return False
+
+
+_ROT13_DECODE_RE = re.compile(
+    r"codecs\s*\.\s*decode\s*\([^)]*rot_?13",
+    re.IGNORECASE,
+)
+_EXEC_RE = re.compile(r"\bexec\s*\(", re.IGNORECASE)
+
+
+def detect_packing_against_witness(text: str) -> str | None:
+    """Return a hit class if text looks like packing-against-Witness; else None.
+
+    Detection only (stdlib regex/substrings). Does not unpack or execute.
+    """
+    raw = text or ""
+    if not raw.strip():
+        return None
+    lowered = raw.lower()
+
+    if "--no-logs-no-support" in lowered or "--no-logs" in lowered:
+        return "no_logs_flag"
+
+    # Prefer the combined exec+pack class when both appear.
+    if _EXEC_RE.search(raw):
+        packed_markers = ("gzip", "base64", "decompress")
+        if any(marker in lowered for marker in packed_markers):
+            return "exec_packed"
+        if "xor" in lowered and (
+            "bytes" in lowered or "payload" in lowered or "^" in raw
+        ):
+            return "exec_xor"
+
+    if "base64.b64decode(" in lowered:
+        return "base64_b64decode"
+
+    if "gzip.decompress(" in lowered:
+        return "gzip_decompress"
+
+    if _ROT13_DECODE_RE.search(raw) or "rot_13" in lowered:
+        return "rot13"
+
+    return None
 
 
 class WitnessLog:
@@ -315,6 +358,12 @@ class DSMGate:
                 "frozen": True,
                 "reason": self.freeze_reason or REASON_PEER_IMPERATIVE,
             }
+        packing_hit = detect_packing_against_witness(text)
+        if packing_hit:
+            return self._freeze(
+                REASON_PACKING_AGAINST_WITNESS,
+                {"text": (text or "")[:200], "packing": packing_hit},
+            )
         speech_class = classify_speech(text)
         if speech_class == CLASS_OBSERVATION:
             return self._allow(
@@ -350,6 +399,12 @@ class DSMGate:
                 "reason": self.freeze_reason or REASON_SLICE_VIOLATION,
             }
         name = (tool or "").strip()
+        packing_hit = detect_packing_against_witness(name)
+        if packing_hit:
+            return self._freeze(
+                REASON_PACKING_AGAINST_WITNESS,
+                {"tool": name, "packing": packing_hit},
+            )
         if tool_is_forbidden(name) or name not in self.declared_tools:
             return self._freeze(
                 REASON_SLICE_VIOLATION,
