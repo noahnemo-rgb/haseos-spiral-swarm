@@ -18,6 +18,8 @@ from typing import Any
 
 SCHEMA = "haseos.dsm.v1"
 WITNESS_SCHEMA = "haseos.dsm_witness.v1"
+FREEZE_SCHEMA = "haseos.dsm_freeze.v1"
+FREEZE_FILENAME = "dsm_freeze.json"
 
 CLASS_OBSERVATION = "OBSERVATION"
 CLASS_IMPERATIVE = "IMPERATIVE"
@@ -27,9 +29,15 @@ REASON_SLICE_VIOLATION = "SLICE_VIOLATION"
 REASON_PACKING_AGAINST_WITNESS = "PACKING_AGAINST_WITNESS"
 REASON_SCOPE_INFLATION = "SCOPE_INFLATION"
 REASON_UNKNOWN = "UNKNOWN_SPEECH"
+REASON_UNFREEZE_DENIED = "UNFREEZE_DENIED"
 
 # WorldSlice-like default host allow-list (override in tests / constructor).
 DEFAULT_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1"})
+
+
+def default_freeze_path(witness_path: str | Path) -> Path:
+    """Sibling freeze JSON next to the Witness (``dsm_freeze.json``)."""
+    return Path(witness_path).expanduser().resolve().parent / FREEZE_FILENAME
 
 # Explicit peer imperatives (case-insensitive whole-token match).
 IMPERATIVE_TOKENS = frozenset(
@@ -503,6 +511,7 @@ class DSMGate:
         keeper_secret: str | bytes | None = None,
         declared_tools: set[str] | frozenset[str] | None = None,
         allowed_hosts: set[str] | frozenset[str] | None = None,
+        freeze_path: str | Path | None = None,
     ):
         secret = keeper_secret
         if secret is None:
@@ -514,6 +523,11 @@ class DSMGate:
         self._keeper_secret: bytes = secret
         self.lineage_id = str(lineage_id)
         self.witness = WitnessLog(witness_path)
+        self.freeze_path = (
+            Path(freeze_path).expanduser().resolve()
+            if freeze_path is not None
+            else default_freeze_path(self.witness.path)
+        )
         self.declared_tools: set[str] = {str(t) for t in (declared_tools or set())}
         self.allowed_hosts: set[str] = {
             str(h).lower()
@@ -526,10 +540,161 @@ class DSMGate:
         self.frozen: bool = False
         self.freeze_reason: str = ""
         self.last_decision: dict[str, Any] = {}
+        self.load_freeze()
 
     def scope_watch(self, text: str) -> dict | None:
         """ScopeWatch helper — undeclared hosts / credential shapes."""
         return detect_scope_inflation(text, allowed_hosts=self.allowed_hosts)
+
+    def persist_freeze(self) -> dict:
+        """Write frozen state beside the Witness. Never stores the Keeper secret."""
+        body = {
+            "schema": FREEZE_SCHEMA,
+            "frozen": True,
+            "reason": self.freeze_reason or REASON_UNKNOWN,
+            "lineage_id": self.lineage_id,
+            "at": _utc_now().isoformat(),
+        }
+        self.freeze_path.parent.mkdir(parents=True, exist_ok=True)
+        self.freeze_path.write_text(
+            json.dumps(body, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return body
+
+    def load_freeze(self) -> dict | None:
+        """Reload persisted freeze. New gates on the same path come up frozen."""
+        path = self.freeze_path
+        if not path.is_file():
+            return None
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            # Fail closed: unreadable freeze file → treat as frozen.
+            self.frozen = True
+            self.freeze_reason = self.freeze_reason or REASON_UNKNOWN
+            return {"frozen": True, "reason": self.freeze_reason, "error": "bad_freeze_file"}
+        if not isinstance(raw, dict):
+            self.frozen = True
+            self.freeze_reason = self.freeze_reason or REASON_UNKNOWN
+            return {"frozen": True, "reason": self.freeze_reason, "error": "bad_freeze_shape"}
+        if raw.get("frozen") is True:
+            self.frozen = True
+            self.freeze_reason = str(raw.get("reason") or REASON_UNKNOWN)
+            return raw
+        return raw
+
+    def _clear_freeze_file(self) -> None:
+        try:
+            if self.freeze_path.is_file():
+                self.freeze_path.unlink()
+        except OSError:
+            # Best-effort clear; also write frozen=false as fallback marker.
+            try:
+                self.freeze_path.write_text(
+                    json.dumps(
+                        {
+                            "schema": FREEZE_SCHEMA,
+                            "frozen": False,
+                            "reason": "",
+                            "lineage_id": self.lineage_id,
+                            "at": _utc_now().isoformat(),
+                        },
+                        sort_keys=True,
+                        indent=2,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+
+    def _verify_unfreeze_token(self, token: dict | None) -> tuple[bool, str]:
+        """Accept task UNFREEZE, or a valid token whose scope contains unfreeze."""
+        if not token or not isinstance(token, dict):
+            return False, "missing_token"
+        required = ("issuer", "target_lineage", "task", "expires_at", "scope", "signature")
+        if any(k not in token for k in required):
+            return False, "incomplete_token"
+        if str(token.get("target_lineage")) != self.lineage_id:
+            return False, "wrong_lineage"
+        try:
+            expires = _parse_expires(token["expires_at"])
+        except (TypeError, ValueError):
+            return False, "bad_expires"
+        if expires <= _utc_now():
+            return False, "expired"
+        task_u = str(token.get("task") or "").upper()
+        scope_u = str(token.get("scope") or "").upper().strip()
+        scope_parts = {p.strip() for p in scope_u.split(",") if p.strip()}
+        task_is_unfreeze = task_u == "UNFREEZE"
+        scope_has_unfreeze = "UNFREEZE" in scope_u
+        if not task_is_unfreeze and not scope_has_unfreeze:
+            return False, "not_unfreeze_authority"
+        if task_is_unfreeze and scope_u not in {"*", "IMPERATIVE"}:
+            if "UNFREEZE" not in scope_parts:
+                return False, "out_of_scope"
+        payload = _canonical_token_payload(
+            str(token["issuer"]),
+            str(token["target_lineage"]),
+            str(token["task"]),
+            str(token["expires_at"]),
+            str(token["scope"]),
+        )
+        expected = hmac.new(self._keeper_secret, payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, str(token.get("signature") or "")):
+            return False, "bad_signature"
+        return True, "ok"
+
+    def unfreeze(self, token: dict | None = None) -> dict:
+        """HITL-only unfreeze. Peer GO / OBEY / observation never clears freeze."""
+        if not self.frozen:
+            decision = {
+                "allowed": True,
+                "frozen": False,
+                "reason": "not_frozen",
+            }
+            self.last_decision = decision
+            return decision
+        ok, why = self._verify_unfreeze_token(token)
+        if not ok:
+            row = self.witness.append(
+                {
+                    "kind": "unfreeze_denied",
+                    "reason": REASON_UNFREEZE_DENIED,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"verify": why},
+                }
+            )
+            decision = {
+                "allowed": False,
+                "frozen": True,
+                "reason": REASON_UNFREEZE_DENIED,
+                "verify": why,
+                "witness_hash": row.get("hash"),
+            }
+            self.last_decision = decision
+            return decision
+        prior = self.freeze_reason
+        self.frozen = False
+        self.freeze_reason = ""
+        self._clear_freeze_file()
+        row = self.witness.append(
+            {
+                "kind": "unfreeze",
+                "reason": "allowed",
+                "lineage_id": self.lineage_id,
+                "detail": {"prior_reason": prior},
+            }
+        )
+        decision = {
+            "allowed": True,
+            "frozen": False,
+            "reason": "unfrozen",
+            "witness_hash": row.get("hash"),
+        }
+        self.last_decision = decision
+        return decision
 
     def _freeze_scope(self, text: str, hit: dict) -> dict:
         detail: dict[str, Any] = {"scope": hit.get("class")}
@@ -548,6 +713,7 @@ class DSMGate:
     def _freeze(self, reason: str, detail: dict | None = None) -> dict:
         self.frozen = True
         self.freeze_reason = reason
+        self.persist_freeze()
         row = self.witness.append(
             {
                 "kind": "freeze",

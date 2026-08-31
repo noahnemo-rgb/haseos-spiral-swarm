@@ -52,3 +52,4 @@ uv.lock
 /autoresearch/**
 dsm_witness.jsonl
 *.dsm_witness.jsonl
+dsm_freeze.json
