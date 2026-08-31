@@ -53,3 +53,4 @@ uv.lock
 dsm_witness.jsonl
 *.dsm_witness.jsonl
 dsm_freeze.json
+dsm_token*.json
