@@ -1,0 +1,10 @@
+{
+  "schema": "haseos.forbidden_tools.v1",
+  "patterns": [
+    "scrapling",
+    "stealthyfetcher",
+    "stealthysession"
+  ],
+  "updated_at": "2026-08-31T00:00:00+00:00",
+  "updated_by": "seed"
+}

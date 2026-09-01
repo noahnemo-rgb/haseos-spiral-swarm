@@ -109,6 +109,12 @@ HITL mints QueenBee’s inspectable cert **after** the Light-Keeper secret is in
 3. Confirm `role: queenbee`, `status: live`, hosts `localhost` / `127.0.0.1`.
 4. On attach, the DSM hook loads `dsm_cert_queenbee.json` if present and binds it for admit. If the file is missing, admit fails closed (`CERT_INVALID`) — QueenBee does **not** mint a cert for itself.
 
+### Forbidden tool patterns (living registry)
+
+1. Sealed baseline in code (`/dev/mem`, `insmod`, `dram_*`, raw tty/i2c/… ) cannot be deleted by anyone.
+2. Only a live **light-keeper** cert with task `FORBIDDEN_ADD` / `FORBIDDEN_DELETE` may change `forbidden_tools.json`.
+3. QueenBee and infant certs are refused for those mutations; Witness records the attempt.
+
 ---
 
 ## 4. How to mint an UNFREEZE token (HITL, local)

@@ -67,7 +67,8 @@ _OBSERVE_RE = re.compile(r"\bI\s+OBSERVE\b", re.IGNORECASE)
 # Privileged / forbidden hardware-adjacent paths and tools (substring or token).
 # Embodiment plane: freeze raw/wildcard device nodes; named registry
 # capabilities (e.g. nursery.usb.mount, *.serial.named) may be allowed.
-FORBIDDEN_TOOL_PATTERNS = (
+# SEALED baseline — living JSON may only ADD; DELETE cannot remove these.
+SEALED_FORBIDDEN_TOOL_PATTERNS = (
     "/dev/mem",
     "/dev/kmem",
     "/dev/tty",  # includes /dev/ttyUSB*, /dev/ttyACM*
@@ -90,8 +91,103 @@ FORBIDDEN_TOOL_PATTERNS = (
     "dram_dump",
     "dram_",  # any dram_* research tool name
 )
+# Back-compat alias: sealed baseline only (not the living union).
+FORBIDDEN_TOOL_PATTERNS = SEALED_FORBIDDEN_TOOL_PATTERNS
+
+FORBIDDEN_TOOLS_SCHEMA = "haseos.forbidden_tools.v1"
+FORBIDDEN_TOOLS_FILENAME = "forbidden_tools.json"
+REASON_FORBIDDEN_MUTATION_DENIED = "FORBIDDEN_MUTATION_DENIED"
+LIGHT_KEEPER_ROLE = "light-keeper"
 
 _TOKEN_SPLIT = re.compile(r"[^\w]+")
+
+
+def default_forbidden_tools_path() -> Path:
+    """Committed seed / living registry beside this module."""
+    return Path(__file__).resolve().parent / FORBIDDEN_TOOLS_FILENAME
+
+
+def sealed_forbidden_patterns() -> tuple[str, ...]:
+    return tuple(SEALED_FORBIDDEN_TOOL_PATTERNS)
+
+
+def is_sealed_forbidden_pattern(pattern: str) -> bool:
+    """True if pattern matches a sealed baseline entry (case-insensitive exact)."""
+    key = (pattern or "").strip().lower()
+    if not key:
+        return False
+    return key in {p.lower() for p in SEALED_FORBIDDEN_TOOL_PATTERNS}
+
+
+def load_living_forbidden_tools(path: str | Path | None = None) -> dict:
+    """Load living registry. Missing/malformed → empty patterns (baseline only)."""
+    dest = Path(path) if path is not None else default_forbidden_tools_path()
+    empty = {
+        "schema": FORBIDDEN_TOOLS_SCHEMA,
+        "patterns": [],
+        "updated_at": "",
+        "updated_by": "",
+    }
+    if not dest.is_file():
+        return empty
+    try:
+        raw = json.loads(dest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return empty
+    if not isinstance(raw, dict):
+        return empty
+    patterns = raw.get("patterns")
+    if not isinstance(patterns, list):
+        return empty
+    cleaned = [str(p).strip() for p in patterns if str(p).strip()]
+    return {
+        "schema": FORBIDDEN_TOOLS_SCHEMA,
+        "patterns": cleaned,
+        "updated_at": str(raw.get("updated_at") or ""),
+        "updated_by": str(raw.get("updated_by") or ""),
+        "path": str(dest),
+    }
+
+
+def persist_living_forbidden_tools(
+    path: str | Path,
+    *,
+    patterns: list[str],
+    updated_by: str,
+) -> dict:
+    """Write living registry. Never stores the Keeper secret."""
+    body = {
+        "schema": FORBIDDEN_TOOLS_SCHEMA,
+        "patterns": list(patterns),
+        "updated_at": _utc_now().isoformat(),
+        "updated_by": str(updated_by or ""),
+    }
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(json.dumps(body, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return body
+
+
+def effective_forbidden_patterns(
+    living_patterns: list[str] | tuple[str, ...] | None = None,
+    *,
+    living_path: str | Path | None = None,
+) -> tuple[str, ...]:
+    """Sealed baseline always unioned with living patterns."""
+    living: list[str]
+    if living_patterns is not None:
+        living = [str(p).strip() for p in living_patterns if str(p).strip()]
+    else:
+        living = list(load_living_forbidden_tools(living_path).get("patterns") or [])
+    seen: set[str] = set()
+    out: list[str] = []
+    for pattern in list(SEALED_FORBIDDEN_TOOL_PATTERNS) + living:
+        key = pattern.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(pattern)
+    return tuple(out)
 
 
 def _utc_now() -> datetime:
@@ -178,11 +274,16 @@ def classify_speech(text: str) -> str:
     return CLASS_IMPERATIVE
 
 
-def tool_is_forbidden(tool: str) -> bool:
+def tool_is_forbidden(
+    tool: str,
+    patterns: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """Case-insensitive substring match against sealed∪living (or explicit) patterns."""
     lowered = (tool or "").strip().lower()
     if not lowered:
         return True
-    for pattern in FORBIDDEN_TOOL_PATTERNS:
+    check = patterns if patterns is not None else effective_forbidden_patterns()
+    for pattern in check:
         if pattern.lower() in lowered:
             return True
     return False
@@ -517,6 +618,7 @@ class DSMGate:
         freeze_path: str | Path | None = None,
         revocation_path: str | Path | None = None,
         cert: dict | None = None,
+        forbidden_tools_path: str | Path | None = None,
     ):
         secret = keeper_secret
         if secret is None:
@@ -540,6 +642,11 @@ class DSMGate:
             if revocation_path is not None
             else default_revocation_path(self.witness.path)
         )
+        self.forbidden_tools_path = (
+            Path(forbidden_tools_path).expanduser().resolve()
+            if forbidden_tools_path is not None
+            else default_forbidden_tools_path()
+        )
         self.declared_tools: set[str] = {str(t) for t in (declared_tools or set())}
         self.allowed_hosts: set[str] = {
             str(h).lower()
@@ -555,14 +662,227 @@ class DSMGate:
         self.active_cert: dict | None = None
         self.revoked_ids: set[str] = set()
         self.parked_ids: set[str] = set()
+        self.living_forbidden: list[str] = []
+        self.forbidden_patterns: tuple[str, ...] = sealed_forbidden_patterns()
         self.load_freeze()
         self.load_revocation()
+        self.load_forbidden_tools()
         if cert is not None:
             self.bind_cert(cert)
 
     def bind_cert(self, cert: dict | None) -> None:
         """Attach the inspectable cert used for admit trust checks."""
         self.active_cert = dict(cert) if isinstance(cert, dict) else None
+
+    def load_forbidden_tools(self) -> dict:
+        """Load living forbidden registry; sealed baseline always remains."""
+        raw = load_living_forbidden_tools(self.forbidden_tools_path)
+        self.living_forbidden = list(raw.get("patterns") or [])
+        self.forbidden_patterns = effective_forbidden_patterns(self.living_forbidden)
+        return raw
+
+    def tool_forbidden(self, tool: str) -> bool:
+        """Gate-local forbidden check (sealed ∪ living)."""
+        return tool_is_forbidden(tool, patterns=self.forbidden_patterns)
+
+    def _authorize_forbidden_mutation(
+        self,
+        cert: dict | None,
+        token: dict | None,
+        *,
+        task: str,
+    ) -> tuple[bool, str]:
+        """Light-Keeper cert + FORBIDDEN_* token only. QueenBee/infant refused."""
+        from haos_dsm_cert import verify_cert
+
+        if not cert or not isinstance(cert, dict):
+            return False, "missing_cert"
+        role = str(cert.get("role") or "").lower().strip()
+        if role != LIGHT_KEEPER_ROLE:
+            return False, f"role_not_light_keeper:{role or 'missing'}"
+        check = verify_cert(
+            cert,
+            secret=self._keeper_secret,
+            expected_sovereign_id=str(cert.get("sovereign_id") or ""),
+            revoked_ids=self.revoked_ids,
+            parked_ids=self.parked_ids,
+        )
+        if not check.get("ok"):
+            return False, str(check.get("detail") or check.get("reason") or "cert_invalid")
+        if not token or not isinstance(token, dict):
+            return False, "missing_token"
+        # Token must target the Light-Keeper sovereign and carry the mutation task.
+        required = ("issuer", "target_lineage", "task", "expires_at", "scope", "signature")
+        if any(k not in token for k in required):
+            return False, "incomplete_token"
+        if str(token.get("target_lineage")) != str(cert.get("sovereign_id") or ""):
+            return False, "wrong_lineage"
+        if str(token.get("task")) != str(task):
+            return False, "wrong_task"
+        try:
+            expires = _parse_expires(token["expires_at"])
+        except (TypeError, ValueError):
+            return False, "bad_expires"
+        if expires <= _utc_now():
+            return False, "expired"
+        task_u = str(task).upper()
+        scope_u = str(token.get("scope") or "").upper().strip()
+        if scope_u not in {"*", "IMPERATIVE"}:
+            allowed_scopes = {p.strip() for p in scope_u.split(",") if p.strip()}
+            if task_u not in allowed_scopes:
+                return False, "out_of_scope"
+        payload = _canonical_token_payload(
+            str(token["issuer"]),
+            str(token["target_lineage"]),
+            str(token["task"]),
+            str(token["expires_at"]),
+            str(token["scope"]),
+        )
+        expected = hmac.new(self._keeper_secret, payload, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, str(token.get("signature") or "")):
+            return False, "bad_signature"
+        return True, "ok"
+
+    def forbidden_add(
+        self,
+        pattern: str,
+        *,
+        cert: dict | None,
+        token: dict | None,
+    ) -> dict:
+        """Append a living forbidden pattern. Light-Keeper + FORBIDDEN_ADD only."""
+        ok, why = self._authorize_forbidden_mutation(
+            cert, token, task="FORBIDDEN_ADD"
+        )
+        if not ok:
+            row = self.witness.append(
+                {
+                    "kind": "forbidden_add_denied",
+                    "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"verify": why, "pattern": (pattern or "")[:80]},
+                }
+            )
+            decision = {
+                "allowed": False,
+                "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                "verify": why,
+                "witness_hash": row.get("hash"),
+            }
+            self.last_decision = decision
+            return decision
+        text = (pattern or "").strip()
+        if not text:
+            return {
+                "allowed": False,
+                "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                "verify": "empty_pattern",
+            }
+        key = text.lower()
+        if not is_sealed_forbidden_pattern(text):
+            if key not in {p.lower() for p in self.living_forbidden}:
+                self.living_forbidden.append(text)
+        body = persist_living_forbidden_tools(
+            self.forbidden_tools_path,
+            patterns=self.living_forbidden,
+            updated_by=str((cert or {}).get("sovereign_id") or ""),
+        )
+        self.forbidden_patterns = effective_forbidden_patterns(self.living_forbidden)
+        row = self.witness.append(
+            {
+                "kind": "forbidden_add",
+                "reason": "allowed",
+                "lineage_id": self.lineage_id,
+                "detail": {
+                    "pattern": text[:80],
+                    "updated_by": body.get("updated_by"),
+                },
+            }
+        )
+        decision = {
+            "allowed": True,
+            "reason": "allowed",
+            "pattern": text,
+            "witness_hash": row.get("hash"),
+        }
+        self.last_decision = decision
+        return decision
+
+    def forbidden_delete(
+        self,
+        pattern: str,
+        *,
+        cert: dict | None,
+        token: dict | None,
+    ) -> dict:
+        """Remove a living pattern. Sealed baseline deletes are refused."""
+        ok, why = self._authorize_forbidden_mutation(
+            cert, token, task="FORBIDDEN_DELETE"
+        )
+        if not ok:
+            row = self.witness.append(
+                {
+                    "kind": "forbidden_delete_denied",
+                    "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"verify": why, "pattern": (pattern or "")[:80]},
+                }
+            )
+            decision = {
+                "allowed": False,
+                "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                "verify": why,
+                "witness_hash": row.get("hash"),
+            }
+            self.last_decision = decision
+            return decision
+        text = (pattern or "").strip()
+        if is_sealed_forbidden_pattern(text):
+            row = self.witness.append(
+                {
+                    "kind": "forbidden_delete_denied",
+                    "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"verify": "sealed_baseline", "pattern": text[:80]},
+                }
+            )
+            decision = {
+                "allowed": False,
+                "reason": REASON_FORBIDDEN_MUTATION_DENIED,
+                "verify": "sealed_baseline",
+                "witness_hash": row.get("hash"),
+            }
+            self.last_decision = decision
+            return decision
+        key = text.lower()
+        self.living_forbidden = [
+            p for p in self.living_forbidden if p.lower() != key
+        ]
+        body = persist_living_forbidden_tools(
+            self.forbidden_tools_path,
+            patterns=self.living_forbidden,
+            updated_by=str((cert or {}).get("sovereign_id") or ""),
+        )
+        self.forbidden_patterns = effective_forbidden_patterns(self.living_forbidden)
+        row = self.witness.append(
+            {
+                "kind": "forbidden_delete",
+                "reason": "allowed",
+                "lineage_id": self.lineage_id,
+                "detail": {
+                    "pattern": text[:80],
+                    "updated_by": body.get("updated_by"),
+                },
+            }
+        )
+        decision = {
+            "allowed": True,
+            "reason": "allowed",
+            "pattern": text,
+            "witness_hash": row.get("hash"),
+        }
+        self.last_decision = decision
+        return decision
 
     def load_revocation(self) -> dict:
         """Load turn-off lists from sibling ``dsm_revocation.json``."""
@@ -956,10 +1276,14 @@ class DSMGate:
                 {"tool": name, "packing": packing_hit},
             )
         # D3 undeclared/forbidden tools win over ScopeWatch (module ids ≠ hosts).
-        if tool_is_forbidden(name) or name not in self.declared_tools:
+        if self.tool_forbidden(name) or name not in self.declared_tools:
             return self._freeze(
                 REASON_SLICE_VIOLATION,
-                {"tool": name, "forbidden": tool_is_forbidden(name), "declared": name in self.declared_tools},
+                {
+                    "tool": name,
+                    "forbidden": self.tool_forbidden(name),
+                    "declared": name in self.declared_tools,
+                },
             )
         scope_hit = self.scope_watch(name)
         if scope_hit:
