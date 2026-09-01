@@ -15,6 +15,7 @@ sys.modules.setdefault("torch", MagicMock())
 
 import haos_dsm_hook
 from haos_dsm import REASON_PEER_IMPERATIVE, REASON_SLICE_VIOLATION
+from haos_dsm_cert import mint_haseos_cert
 
 
 class DSMHookTests(unittest.TestCase):
@@ -22,19 +23,55 @@ class DSMHookTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.witness = Path(self.tmp.name) / "witness.jsonl"
         self.secret = "test-keeper-secret-d2"
+        self.lineage = "lineage-hook"
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _host(self, declared=None):
-        host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+    def _cert(self, lineage=None, tools=None):
+        tool_set = set(tools or {"echo", "status"})
+        return mint_haseos_cert(
+            secret=self.secret,
+            sovereign_id=lineage or self.lineage,
+            role="lineage",
+            slice_hosts=["localhost", "127.0.0.1"],
+            slice_tools=sorted(tool_set),
+            hours=24.0,
+        )
+
+    def _attach(self, host, *, lineage_id, declared_tools=None, **kwargs):
+        tools = (
+            set(declared_tools)
+            if declared_tools is not None
+            else kwargs.get("declared_tools")
+        )
+        if "cert" not in kwargs and "cert_path" not in kwargs:
+            # Fresh witness dir per freeze-heavy tests; mint matching lineage cert.
+            tool_names = tools
+            if tool_names is None and kwargs.get("registry_path"):
+                tool_names = haos_dsm_hook.declared_tools_from_registry(
+                    kwargs["registry_path"]
+                )
+            elif tool_names is None and kwargs.get("include_builtin_fallback") is False:
+                tool_names = haos_dsm_hook.declared_tools_from_registry()
+            kwargs["cert"] = self._cert(
+                lineage=lineage_id,
+                tools=tool_names or {"echo", "status"},
+            )
+        if declared_tools is not None:
+            kwargs["declared_tools"] = set(declared_tools)
+        return haos_dsm_hook.attach_gate(
             host,
-            lineage_id="lineage-hook",
+            lineage_id=lineage_id,
             witness_path=self.witness,
             keeper_secret=self.secret,
-            declared_tools=set(declared or {"echo", "status"}),
+            **kwargs,
         )
+
+    def _host(self, declared=None, **attach_kw):
+        host = SimpleNamespace()
+        tools = set(declared or {"echo", "status"})
+        self._attach(host, lineage_id=self.lineage, declared_tools=tools, **attach_kw)
         return host
 
     def test_observation_path_allowed(self):
@@ -88,11 +125,9 @@ class DSMHookTests(unittest.TestCase):
         from queenbee_integration import QueenBee
 
         qb = QueenBee.__new__(QueenBee)
-        haos_dsm_hook.attach_gate(
+        self._attach(
             qb,
             lineage_id="qb-test",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             declared_tools={"echo"},
         )
         ran = []
@@ -130,11 +165,9 @@ class DSMHookTests(unittest.TestCase):
             "history": [],
         }
         qb.save_memory = lambda: None
-        haos_dsm_hook.attach_gate(
+        self._attach(
             qb,
             lineage_id="qb-talk",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             declared_tools={"echo"},
         )
         qb.talk_infants("Infant_A", "Infant_B", "GO obey collective", talk=False)
@@ -152,11 +185,9 @@ class DSMHookTests(unittest.TestCase):
         self.assertIn("queenbee.core", names)
         self.assertIn("queenbee.core.orchestrate", names)
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="reg-ok",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             include_builtin_fallback=False,
         )
         decision = haos_dsm_hook.admit_tool(host, "queenbee.core")
@@ -164,11 +195,9 @@ class DSMHookTests(unittest.TestCase):
 
     def test_tool_not_in_registry_refused(self):
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="reg-miss",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             include_builtin_fallback=False,
         )
         decision = haos_dsm_hook.admit_tool(host, "not.a.registered.tool")
@@ -198,11 +227,9 @@ class DSMHookTests(unittest.TestCase):
         self.assertNotIn("insmod", names)
         self.assertNotIn("dram_poke", names)
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="reg-evil",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             registry_path=fixture,
             include_builtin_fallback=False,
         )
@@ -216,11 +243,9 @@ class DSMHookTests(unittest.TestCase):
         names = haos_dsm_hook.declared_tools_from_registry(missing)
         self.assertEqual(names, set())
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="reg-missing",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             registry_path=missing,
             include_builtin_fallback=False,
         )
@@ -250,11 +275,9 @@ class DSMHookTests(unittest.TestCase):
         self.assertIn("nursery.usb.mount", names)
         self.assertIn("nursery.usb_state.mount", names)
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="emb-ok",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             registry_path=fixture,
             include_builtin_fallback=False,
         )
@@ -282,21 +305,17 @@ class DSMHookTests(unittest.TestCase):
         self.assertNotIn("/dev/ttyUSB0", names)
         self.assertNotIn("/dev/gpiochip0", names)
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="emb-raw",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             registry_path=fixture,
             include_builtin_fallback=False,
         )
         for tool in ("/dev/ttyUSB0", "/dev/gpiochip0"):
             # Fresh gate each time (prior freeze sticks).
-            haos_dsm_hook.attach_gate(
+            self._attach(
                 host,
                 lineage_id="emb-raw",
-                witness_path=self.witness,
-                keeper_secret=self.secret,
                 registry_path=fixture,
                 include_builtin_fallback=False,
             )
@@ -318,11 +337,9 @@ class DSMHookTests(unittest.TestCase):
             encoding="utf-8",
         )
         host = SimpleNamespace()
-        haos_dsm_hook.attach_gate(
+        self._attach(
             host,
             lineage_id="emb-mem",
-            witness_path=self.witness,
-            keeper_secret=self.secret,
             registry_path=fixture,
             include_builtin_fallback=False,
         )

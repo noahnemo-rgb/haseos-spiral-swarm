@@ -106,7 +106,8 @@ class QueenBee:
         self.memory.setdefault("academy_candidates", [])
         self.memory.setdefault("cohorts", {})
         self.memory.setdefault("cohort_activity", {})
-        # DSM D2 — peer/tool gate (fail closed if later cleared). Secret from env only.
+        # DSM — peer/tool gate. Loads dsm_cert_queenbee.json if present (cert JSON
+        # only). Keeper secret stays in env / gate private — never on this object.
         haos_dsm_hook.attach_gate(self)
         self._show_daily_greeting()
 

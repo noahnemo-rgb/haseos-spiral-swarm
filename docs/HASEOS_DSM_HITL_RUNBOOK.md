@@ -88,6 +88,27 @@ One-time HITL bootstrap on this machine. **Do not** paste secret values into cha
 4. Confirm the file shows `role: light-keeper`, `status: live`, hosts `localhost` / `127.0.0.1`.
 5. Keep the cert file local (`dsm_cert*.json` is gitignored). Revoke or park later to **turn off** act authority — do not destroy Witness or USB-state.
 
+### Second cert: QueenBee
+
+HITL mints QueenBee’s inspectable cert **after** the Light-Keeper secret is in the local shell. QueenBee stores **cert JSON only** — never the Keeper secret.
+
+1. Export the secret locally (example uses a gitignored file you already keep off-repo):
+
+   ```bash
+   export HASEOS_KEEPER_SECRET=$(cat .haseos_keeper)
+   ```
+
+2. Mint the QueenBee cert:
+
+   ```bash
+   python3 scripts/init_queenbee_cert.py \
+     --sovereign-id queenbee.orchestrator \
+     --out dsm_cert_queenbee.json
+   ```
+
+3. Confirm `role: queenbee`, `status: live`, hosts `localhost` / `127.0.0.1`.
+4. On attach, the DSM hook loads `dsm_cert_queenbee.json` if present and binds it for admit. If the file is missing, admit fails closed (`CERT_INVALID`) — QueenBee does **not** mint a cert for itself.
+
 ---
 
 ## 4. How to mint an UNFREEZE token (HITL, local)

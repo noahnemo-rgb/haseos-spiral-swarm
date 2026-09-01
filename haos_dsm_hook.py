@@ -25,7 +25,8 @@ from haos_dsm import (
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = PROJECT_ROOT / "harness_registry.json"
 DEFAULT_WITNESS = PROJECT_ROOT / "dsm_witness.jsonl"
-DEFAULT_LINEAGE = "queenbee.peer"
+DEFAULT_QUEENBEE_CERT = PROJECT_ROOT / "dsm_cert_queenbee.json"
+DEFAULT_LINEAGE = "queenbee.orchestrator"
 # Last-resort only when registry yields nothing; tests may disable.
 DEFAULT_DECLARED_TOOLS = frozenset({"echo", "status", "wading_pool.select"})
 
@@ -111,6 +112,20 @@ def resolve_declared_tools(
     return set()
 
 
+def load_cert_file(path: str | Path | None = None) -> dict | None:
+    """Load an inspectable HASEOS cert JSON. Missing/malformed → None (fail closed)."""
+    dest = Path(path) if path is not None else DEFAULT_QUEENBEE_CERT
+    if not dest.is_file():
+        return None
+    try:
+        raw = json.loads(dest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(raw, dict) or not raw.get("signature"):
+        return None
+    return raw
+
+
 def attach_gate(
     host: Any,
     *,
@@ -121,11 +136,14 @@ def attach_gate(
     registry_path: str | Path | None = None,
     include_builtin_fallback: bool = True,
     cert: dict | None = None,
+    cert_path: str | Path | None = None,
 ) -> DSMGate:
-    """Construct and attach a DSMGate on host._dsm_gate. Secret from arg or env.
+    """Construct and attach a DSMGate on host._dsm_gate.
 
-    If ``cert`` is omitted and a Keeper secret is available, binds a short-lived
-    live HASEOS cert for this lineage (D11 trust path).
+    Loads cert JSON from ``cert`` or ``cert_path`` / default QueenBee cert file.
+    Does **not** mint a cert inside QueenBee. Missing cert → admit fails closed
+    (CERT_INVALID). Keeper secret may come from env for HMAC verify only — it is
+    never stored as an attribute on the QueenBee/host object.
     """
     secret = keeper_secret
     if secret is None:
@@ -135,26 +153,23 @@ def attach_gate(
         registry_path=registry_path,
         include_builtin_fallback=include_builtin_fallback,
     )
+    bound = cert
+    if bound is None:
+        bound = load_cert_file(
+            cert_path if cert_path is not None else DEFAULT_QUEENBEE_CERT
+        )
     gate = DSMGate(
         lineage_id=lineage_id,
         witness_path=witness_path or DEFAULT_WITNESS,
         keeper_secret=secret,
         declared_tools=tools,
-        cert=cert,
+        cert=bound,
     )
-    if gate.active_cert is None and secret:
-        from haos_dsm_cert import mint_haseos_cert
-
-        gate.bind_cert(
-            mint_haseos_cert(
-                secret=secret,
-                sovereign_id=gate.lineage_id,
-                role="lineage",
-                slice_hosts=sorted(gate.allowed_hosts),
-                slice_tools=sorted(gate.declared_tools),
-                hours=24.0,
-            )
-        )
+    # Cert JSON only on the host surface — never the Keeper secret.
+    if bound is not None:
+        host._dsm_cert = dict(bound)
+    else:
+        host._dsm_cert = None
     host._dsm_gate = gate
     return gate
 
