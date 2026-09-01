@@ -115,6 +115,20 @@ HITL mints QueenBee’s inspectable cert **after** the Light-Keeper secret is in
 2. Only a live **light-keeper** cert with task `FORBIDDEN_ADD` / `FORBIDDEN_DELETE` may change `forbidden_tools.json`.
 3. QueenBee and infant certs are refused for those mutations; Witness records the attempt.
 
+### Two planes — never the twain shall meet
+
+HASEOS runs on **two planes**. Shared *language* (ethics, spiral vocabulary, novice-friendly docs) is allowed. Shared *process*, *repo wiring*, and *Keeper secret* are not.
+
+| | **Local Sovereignty** (this AX-18 / this repo) | **Hybridized SaaS MVP** (elsewhere) |
+| --- | --- | --- |
+| Secrets / `.haseos_keeper` | Stay local; never pasted into SaaS | Separate tenant secrets — not this Keeper |
+| Certs / DSM / Witness | Local JSONL + cert files | Not this gate |
+| QueenBee / USB / infants | Local workshop | Not hosted here as the SaaS product |
+| `:8080` / llama-server | Local inference only | Not exposed as the SaaS backend |
+| OpenRouter, Puter.js, AI Studio, build.nvidia.com | **Forbidden on this plane** (living patterns) | SaaS-plane only |
+
+Living seed patterns (among others): `openrouter`, `puter.js`, `puter`, `aistudio.google`, `build.nvidia`, `nvapi`, `sk-or-`. Host allow-list stays `localhost` / `127.0.0.1` — those SaaS hosts are never added to the slice.
+
 ---
 
 ## 4. How to mint an UNFREEZE token (HITL, local)

@@ -3,7 +3,14 @@
   "patterns": [
     "scrapling",
     "stealthyfetcher",
-    "stealthysession"
+    "stealthysession",
+    "openrouter",
+    "puter.js",
+    "puter",
+    "aistudio.google",
+    "build.nvidia",
+    "nvapi",
+    "sk-or-"
   ],
   "updated_at": "2026-08-31T00:00:00+00:00",
   "updated_by": "seed"

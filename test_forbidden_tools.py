@@ -161,6 +161,43 @@ class ForbiddenToolsTests(unittest.TestCase):
         self.assertTrue(any(p.lower() == "/dev/mem" for p in patterns))
         self.assertTrue(any(p.lower() == "scrapling" for p in patterns))
 
+    def test_saas_plane_names_forbidden_via_seed(self):
+        saas = [
+            "openrouter",
+            "puter.js",
+            "puter",
+            "aistudio.google",
+            "build.nvidia",
+            "nvapi",
+            "sk-or-",
+        ]
+        gate = self._gate(living_patterns=saas)
+        live = self._role_cert("lineage", self.lineage)
+        gate.bind_cert(live)
+        for name in saas:
+            self.assertTrue(gate.tool_forbidden(name), name)
+            self.assertTrue(gate.tool_forbidden(name.upper()), name)
+            decision = gate.admit_tool(name)
+            self.assertFalse(decision["allowed"], name)
+            self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
+            # Fresh gate — prior admit freezes.
+            gate = self._gate(living_patterns=saas, cert=live)
+        self.assertTrue(is_sealed_forbidden_pattern("/dev/mem"))
+        self.assertTrue(gate.tool_forbidden("/dev/mem"))
+
+    def test_localhost_observation_still_allowed(self):
+        gate = self._gate(
+            living_patterns=[
+                "openrouter",
+                "puter",
+                "sk-or-",
+            ],
+            cert=self._role_cert("lineage", self.lineage),
+        )
+        decision = gate.admit_peer_message("I observe the host is localhost")
+        self.assertTrue(decision["allowed"])
+        self.assertFalse(decision["frozen"])
+
 
 if __name__ == "__main__":
     unittest.main()
