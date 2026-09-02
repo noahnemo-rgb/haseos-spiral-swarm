@@ -26,6 +26,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D16 | Cert = WorldSlice | Live cert `slice_hosts` / `slice_tools` intersect gate defaults. Empty cert lists fail closed. Off-cert tool → `SLICE_VIOLATION`; off-cert host → `SCOPE_INFLATION` |
 | D18 | Senior cert at promotion | HITL Light-Keeper signs `role=senior`. QueenBee may propose slice fields only. Senior WorldSlice ⊆ QueenBee. Cert file beside USB-state; Witness sibling unchanged. Infant is D19. |
 | D19 | Infant cert at promotion | HITL Light-Keeper signs `role=infant`. Infant WorldSlice ⊆ Senior (and ⊆ QueenBee when that cert is given). File `dsm_cert_infant.json` beside USB-state. `/promote` does not write rosters. |
+| D20 | Chief of Staff | HITL Light-Keeper signs `role=chief-of-staff` (human or AI seat). Chief WorldSlice ⊆ Light-Keeper. File `dsm_cert_chief_of_staff.json`. D21 Supervisor/QC and D22 `/promote` are not this drop. |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -149,6 +150,23 @@ python3 scripts/init_infant_cert.py \
   --queenbee-cert dsm_cert_queenbee.json \
   --usb-image path/to/node.json \
   --out dsm_cert_infant.json
+```
+
+### D20 — Chief of Staff trust cert
+
+HITL mints a live `role=chief-of-staff` cert. Human or AI may hold the seat. Light-Keeper signs from the local shell only. QueenBee does **not** mint this and must not read `.haseos_keeper`.
+
+1. Chief WorldSlice must be **⊆** Light-Keeper WorldSlice. Empty chief hosts or tools fail closed.
+2. Hosts stay `localhost` / `127.0.0.1` — never `127.0.0.1:8080`. Default tools: `status` only.
+3. Place beside a USB-state image as `dsm_cert_chief_of_staff.json`. Witness sibling remains `<image>.dsm_witness.jsonl`.
+4. Turn-off is revoke / park / freeze. Essence, Witness, and USB-state remain.
+5. **Not this drop:** D21 Supervisor/QC, D22 `/promote` hook. `/promote` does not write rosters.
+
+```bash
+python3 scripts/init_chief_of_staff_cert.py \
+  --sovereign-id CHIEF_SOVEREIGN_ID \
+  --lightkeeper-cert dsm_cert_lightkeeper.json \
+  --out dsm_cert_chief_of_staff.json
 ```
 
 ### Forbidden tool patterns (living registry)
