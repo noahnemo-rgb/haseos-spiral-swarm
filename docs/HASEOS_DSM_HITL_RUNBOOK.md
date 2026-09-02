@@ -25,6 +25,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D11 | HASEOS cert | Inspectable HMAC-signed cert (`sovereign_id`, slice, status). Admit requires live cert. Revoke/park = turn-off authority (Witness/USB-state remain). IDAO-root comes later |
 | D16 | Cert = WorldSlice | Live cert `slice_hosts` / `slice_tools` intersect gate defaults. Empty cert lists fail closed. Off-cert tool → `SLICE_VIOLATION`; off-cert host → `SCOPE_INFLATION` |
 | D18 | Senior cert at promotion | HITL Light-Keeper signs `role=senior`. QueenBee may propose slice fields only. Senior WorldSlice ⊆ QueenBee. Cert file beside USB-state; Witness sibling unchanged. Infant is D19. |
+| D19 | Infant cert at promotion | HITL Light-Keeper signs `role=infant`. Infant WorldSlice ⊆ Senior (and ⊆ QueenBee when that cert is given). File `dsm_cert_infant.json` beside USB-state. `/promote` does not write rosters. |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -129,6 +130,25 @@ python3 scripts/init_senior_cert.py \
   --queenbee-cert dsm_cert_queenbee.json \
   --usb-image path/to/node.json \
   --out dsm_cert_senior.json
+```
+
+### D19 — Infant cert at promotion
+
+HITL writes a live `role=infant` cert. Light-Keeper signs from the local shell only. QueenBee may propose fields — it must not read `.haseos_keeper`.
+
+1. Infant WorldSlice must be **⊆** Senior WorldSlice. If `--queenbee-cert` is given, also infant ⊆ QueenBee (infant ⊆ senior ⊆ queenbee).
+2. Empty infant hosts or tools fail closed. Hosts stay `localhost` / `127.0.0.1` — never `127.0.0.1:8080`.
+3. Place beside a USB-state image as `dsm_cert_infant.json`. Witness sibling remains `<image>.dsm_witness.jsonl`. Notes store `cert_id`, `role`, `sovereign_id`, `path` only.
+4. Turn-off is revoke / park / freeze. Essence, Witness, and USB-state remain.
+5. `role=senior` is D18 — refused here. `/promote` does **not** write infant or senior rosters.
+
+```bash
+python3 scripts/init_infant_cert.py \
+  --sovereign-id INFANT_SOVEREIGN_ID \
+  --senior-cert dsm_cert_senior.json \
+  --queenbee-cert dsm_cert_queenbee.json \
+  --usb-image path/to/node.json \
+  --out dsm_cert_infant.json
 ```
 
 ### Forbidden tool patterns (living registry)
