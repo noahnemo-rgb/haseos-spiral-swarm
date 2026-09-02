@@ -17,6 +17,7 @@ from typing import Any, Callable
 
 from haos_dsm import (
     DSMGate,
+    MOUTH_DEFAULT_URL,
     REASON_PEER_IMPERATIVE,
     REASON_SLICE_VIOLATION,
     tool_is_forbidden,
@@ -202,6 +203,14 @@ def admit_tool(host: Any, tool: str, cert: dict | None = None) -> dict:
     if gate is None:
         return dict(FAIL_CLOSED)
     return gate.admit_tool(tool, cert=cert)
+
+
+def admit_mouth(host: Any, url: str | None = None, cert: dict | None = None) -> dict:
+    """Admit Bonsai Mouth via WorldSlice hosts. Fail closed if no gate."""
+    gate = get_gate(host)
+    if gate is None:
+        return dict(FAIL_CLOSED)
+    return gate.admit_mouth(url or MOUTH_DEFAULT_URL, cert=cert)
 
 
 def refuse_message(decision: dict) -> None:

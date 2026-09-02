@@ -188,11 +188,19 @@ Primary workshop Witness (hook default) is typically `dsm_witness.jsonl` at the 
 
 ---
 
+### Mouth vs Wrap
+
+- **Mouth** is local llama-server (`http://127.0.0.1:8080`). The WorldSlice host token is bare `127.0.0.1` or `localhost` — never `127.0.0.1:8080`.
+- **Wrap** is SaaS-plane (OpenRouter / Puter / AI Studio / NVIDIA). Shared language only; never a fallback when the Mouth is down.
+- Live Bonsai smoke is DSM-gated (`admit_mouth` / `smoke_mouth`). Empty `slice_hosts` **parks** (turn-off). Witness stays; lineage is not destroyed.
+
+---
+
 ## 7. What is still not hooked
 
 Be honest with co-creators — these are **not** DSM-controlled live surfaces yet:
 
-1. Live Bonsai / remote node smoke as a DSM-gated path.
+1. Remote / world-node Bonsai smoke (localhost Mouth smoke **is** DSM-gated; Wrap is never the fallback).
 2. Physical phone farm actuation under DSM.
 3. World-wide (or any) servo / motor control.
 4. Skitter, DRAM research tools, scanners, and port probes as admitted capabilities.

@@ -123,7 +123,11 @@ def mint_haseos_cert(
     status_s = str(status or CERT_STATUS_LIVE).lower().strip()
     if status_s not in {CERT_STATUS_LIVE, CERT_STATUS_REVOKED, CERT_STATUS_PARKED}:
         status_s = CERT_STATUS_LIVE
-    hosts = sorted(str(h).lower() for h in (slice_hosts or ["localhost", "127.0.0.1"]))
+    if slice_hosts is None:
+        hosts = ["localhost", "127.0.0.1"]
+    else:
+        hosts = [str(h).lower() for h in slice_hosts]
+    hosts = sorted(h for h in hosts if h)
     tools = sorted(str(t) for t in (slice_tools or []))
     cert: dict[str, Any] = {
         "schema": CERT_SCHEMA,

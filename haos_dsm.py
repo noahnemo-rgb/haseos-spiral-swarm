@@ -15,6 +15,7 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 SCHEMA = "haseos.dsm.v1"
 WITNESS_SCHEMA = "haseos.dsm_witness.v1"
@@ -33,6 +34,10 @@ REASON_UNFREEZE_DENIED = "UNFREEZE_DENIED"
 REASON_CERT_INVALID = "CERT_INVALID"
 REASON_CERT_REVOKED = "CERT_REVOKED"
 REASON_CERT_PARKED = "CERT_PARKED"
+REASON_MOUTH_UNREACHABLE = "MOUTH_UNREACHABLE"
+
+# Bonsai Mouth default URL. WorldSlice host token is the bare loopback, never :8080.
+MOUTH_DEFAULT_URL = "http://127.0.0.1:8080"
 
 # WorldSlice-like default host allow-list (override in tests / constructor).
 DEFAULT_ALLOWED_HOSTS = frozenset({"localhost", "127.0.0.1"})
@@ -452,6 +457,22 @@ def extract_hosts(text: str) -> list[str]:
     return found
 
 
+def mouth_host_token(url: str | None = None) -> str:
+    """Bare host from a Mouth URL. Port is never part of the WorldSlice token.
+
+    ``http://127.0.0.1:8080`` → ``127.0.0.1``; ``http://localhost:8080`` → ``localhost``.
+    """
+    raw = (url or MOUTH_DEFAULT_URL).strip()
+    if not raw:
+        return ""
+    parsed = urlparse(raw if "://" in raw else f"http://{raw}")
+    host = (parsed.hostname or "").strip().lower()
+    if host:
+        return host
+    found = extract_hosts(raw)
+    return found[0].lower() if found else ""
+
+
 def detect_credential_shapes(text: str) -> list[dict]:
     """Return redacted credential-shaped hits (no full secret values)."""
     raw = text or ""
@@ -683,7 +704,9 @@ class DSMGate:
         cert_hosts = {str(h).lower().strip() for h in raw if str(h).strip()}
         if not cert_hosts:
             return set()
-        return {h for h in self._base_hosts if h in cert_hosts}
+        # ∩ then D14/D15 overlay — SaaS / living-forbid tokens never join the slice.
+        hosts = {h for h in self._base_hosts if h in cert_hosts}
+        return {h for h in hosts if not self.tool_forbidden(h)}
 
     def intersect_slice_tools(self, cert: dict | None) -> set[str]:
         """Registry/base ∩ cert.slice_tools, then scrub sealed+living forbids.
@@ -1333,6 +1356,132 @@ class DSMGate:
         if scope_hit:
             return self._freeze_scope(name, scope_hit)
         return self._allow("tool", {"tool": name})
+
+    def admit_mouth(self, url: str | None = None, cert: dict | None = None) -> dict:
+        """Admit the Bonsai Mouth via WorldSlice hosts (not a registry tool).
+
+        Host token is bare ``127.0.0.1`` / ``localhost`` — never ``127.0.0.1:8080``.
+        Empty intersected slice parks (turn-off). Essence / Witness remain.
+        """
+        if self.frozen:
+            return {
+                "allowed": False,
+                "frozen": True,
+                "reason": self.freeze_reason or REASON_CERT_PARKED,
+            }
+        cert_block = self.require_live_cert(cert)
+        if cert_block is not None:
+            return cert_block
+        if not self.allowed_hosts:
+            return self.park_authority()
+        host = mouth_host_token(url)
+        if not host:
+            return self._freeze(
+                REASON_SCOPE_INFLATION,
+                {"scope": "undeclared_host", "host": "", "note": "empty_mouth_host"},
+            )
+        if self.tool_forbidden(host) or host not in self.allowed_hosts:
+            return self._freeze_scope(
+                host,
+                {"class": "undeclared_host", "host": host},
+            )
+        # Existing admit path: observation naming the bare host token.
+        return self.admit_peer_message(f"I observe the host is {host}", cert=cert)
+
+    def smoke_mouth(
+        self,
+        url: str | None = None,
+        *,
+        cert: dict | None = None,
+        health: Any = None,
+        client_url: str | None = None,
+    ) -> dict:
+        """DSM-gated Mouth smoke. ``health`` is a callable — no implicit SaaS client."""
+        target = url or MOUTH_DEFAULT_URL
+        decision = self.admit_mouth(target, cert=cert)
+        if not decision.get("allowed"):
+            out = dict(decision)
+            out["smoked"] = False
+            out["http"] = False
+            return out
+        probe_url = client_url if client_url is not None else target
+        probe_host = mouth_host_token(probe_url)
+        if (
+            probe_host not in self.allowed_hosts
+            or self.tool_forbidden(probe_host)
+        ):
+            row = self.witness.append(
+                {
+                    "kind": "mouth_saas_refused",
+                    "reason": REASON_SCOPE_INFLATION,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"host": probe_host, "note": "no_saas_fallback"},
+                }
+            )
+            return {
+                "allowed": False,
+                "frozen": False,
+                "reason": REASON_SCOPE_INFLATION,
+                "smoked": False,
+                "http": False,
+                "witness_hash": row.get("hash"),
+            }
+        if health is None:
+            row = self.witness.append(
+                {
+                    "kind": "mouth_unreachable",
+                    "reason": REASON_MOUTH_UNREACHABLE,
+                    "lineage_id": self.lineage_id,
+                    "detail": {"host": probe_host, "note": "no_health_probe"},
+                }
+            )
+            return {
+                "allowed": False,
+                "frozen": False,
+                "reason": REASON_MOUTH_UNREACHABLE,
+                "smoked": False,
+                "http": False,
+                "witness_hash": row.get("hash"),
+            }
+        try:
+            result = health()
+        except Exception as exc:
+            row = self.witness.append(
+                {
+                    "kind": "mouth_unreachable",
+                    "reason": REASON_MOUTH_UNREACHABLE,
+                    "lineage_id": self.lineage_id,
+                    "detail": {
+                        "host": probe_host,
+                        "error_class": type(exc).__name__,
+                    },
+                }
+            )
+            return {
+                "allowed": False,
+                "frozen": False,
+                "reason": REASON_MOUTH_UNREACHABLE,
+                "smoked": False,
+                "http": False,
+                "witness_hash": row.get("hash"),
+            }
+        row = self.witness.append(
+            {
+                "kind": "mouth_smoke",
+                "reason": "allowed",
+                "lineage_id": self.lineage_id,
+                "detail": {"host": probe_host},
+            }
+        )
+        return {
+            "allowed": True,
+            "frozen": False,
+            "reason": "allowed",
+            "smoked": True,
+            "http": True,
+            "health": result,
+            "witness_hash": row.get("hash"),
+        }
 
 
 def _primary_imperative_task(text: str) -> str:

@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Phase 0 smoke: health + one chat turn + one ternary check over HTTP."""
+"""Phase 0 smoke: DSM-gated Mouth, then health + chat + ternary over HTTP."""
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import haos_dsm_hook
+from haos_dsm_mouth import smoke_mouth_http
 from inference_client import InferenceClient
 from queenbee_integration import QueenBee
 
 
 def main() -> int:
     client = InferenceClient()
-    health = client.health()
+    host = SimpleNamespace()
+    haos_dsm_hook.attach_gate(host)
+    gated = smoke_mouth_http(host._dsm_gate, url=client.base_url, client=client)
+    if not gated.get("allowed"):
+        print("DSM refused Mouth smoke:", gated.get("reason"))
+        return 2
+    health = gated.get("health") or client.health()
     print("health:", health)
 
     ping = client.chat(
