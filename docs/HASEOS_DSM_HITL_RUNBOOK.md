@@ -24,6 +24,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D9 | Token mint CLI | Local `scripts/mint_dsm_token.py` reads `HASEOS_KEEPER_SECRET` from the shell env and prints a JSON token |
 | D11 | HASEOS cert | Inspectable HMAC-signed cert (`sovereign_id`, slice, status). Admit requires live cert. Revoke/park = turn-off authority (Witness/USB-state remain). IDAO-root comes later |
 | D16 | Cert = WorldSlice | Live cert `slice_hosts` / `slice_tools` intersect gate defaults. Empty cert lists fail closed. Off-cert tool → `SLICE_VIOLATION`; off-cert host → `SCOPE_INFLATION` |
+| D18 | Senior cert at promotion | HITL Light-Keeper signs `role=senior`. QueenBee may propose slice fields only. Senior WorldSlice ⊆ QueenBee. Cert file beside USB-state; Witness sibling unchanged. Infant is D19. |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -111,6 +112,24 @@ HITL mints QueenBee’s inspectable cert **after** the Light-Keeper secret is in
 
 3. Confirm `role: queenbee`, `status: live`, hosts `localhost` / `127.0.0.1`.
 4. On attach, the DSM hook loads `dsm_cert_queenbee.json` if present and binds it for admit. If the file is missing, admit fails closed (`CERT_INVALID`) — QueenBee does **not** mint a cert for itself.
+
+### D18 — Senior cert at promotion
+
+HITL promotion writes a live `role=senior` cert. Light-Keeper signs with `HASEOS_KEEPER_SECRET` from the local shell only. QueenBee may **propose** `sovereign_id` / slice fields — it must not read `.haseos_keeper`.
+
+1. Senior WorldSlice must be **⊆** QueenBee WorldSlice (hosts strip/lower; tools exact names). Empty senior lists fail closed.
+2. Hosts stay `localhost` / `127.0.0.1` — never `127.0.0.1:8080`.
+3. Place beside a USB-state image as `dsm_cert_senior.json`. Witness sibling remains `<image>.dsm_witness.jsonl`. USB notes store `cert_id`, `role`, `sovereign_id`, `path` only.
+4. Turn-off is revoke / park / freeze. Essence, Witness, and USB-state remain.
+5. `role=infant` is **D19** — refused here. `/promote` does **not** yet write a senior roster.
+
+```bash
+python3 scripts/init_senior_cert.py \
+  --sovereign-id SENIOR_SOVEREIGN_ID \
+  --queenbee-cert dsm_cert_queenbee.json \
+  --usb-image path/to/node.json \
+  --out dsm_cert_senior.json
+```
 
 ### Forbidden tool patterns (living registry)
 
