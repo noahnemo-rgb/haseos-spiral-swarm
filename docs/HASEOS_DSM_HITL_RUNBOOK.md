@@ -28,6 +28,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D19 | Infant cert at promotion | HITL Light-Keeper signs `role=infant`. Infant WorldSlice ⊆ Senior (and ⊆ QueenBee when that cert is given). File `dsm_cert_infant.json` beside USB-state. `/promote` does not write rosters. |
 | D20 | Chief of Staff | HITL Light-Keeper signs `role=chief-of-staff` (human or AI seat). Chief WorldSlice ⊆ Light-Keeper. File `dsm_cert_chief_of_staff.json`. D21 Supervisor/QC and D22 `/promote` are not this drop. |
 | D21 | Supervisor/QC | HITL Light-Keeper signs `role=supervisor-qc` (Team Leading Supervisor/QC). Supervisor WorldSlice ⊆ Chief of Staff (and ⊆ Light-Keeper when that cert is given). File `dsm_cert_supervisor_qc.json`. D22 `/promote` is not this drop. |
+| D22 | /promote cert | HITL `/promote` still briefs and sets `promoted=true`, then attempts an Infant (default) or Senior (`--senior`) cert beside USB. QueenBee proposes fields only. Secret stays in the shell (`HASEOS_KEEPER_SECRET`). Roster remains HITL. |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -187,6 +188,20 @@ python3 scripts/init_supervisor_qc_cert.py \
   --chief-cert dsm_cert_chief_of_staff.json \
   --lightkeeper-cert dsm_cert_lightkeeper.json \
   --out dsm_cert_supervisor_qc.json
+```
+
+### D22 — HITL `/promote` writes Senior or Infant cert
+
+`/promote` is still HITL. It still prints the briefing and sets `promoted=true`. Then it asks `haos_dsm_promote` to mint a living cert beside the USB image when the infant is seated (`usb_states/<node_id>.json`).
+
+1. QueenBee proposes `sovereign_id` / role / slice only. Default role is **infant**. Trailing `--senior` writes a senior cert.
+2. Light-Keeper HMAC secret comes from the shell env `HASEOS_KEEPER_SECRET` only. Never attach it to QueenBee. Never write it to USB notes, Witness detail, or stdout.
+3. Inclusion stays infant ⊆ senior ⊆ queenbee. Missing secret or missing parent cert → cert skipped; promotion marker still stands.
+4. Cert write attempted; roster is still HITL. This drop does not mint Chief of Staff or Supervisor/QC.
+
+```text
+/promote <id> <reason>
+/promote <id> <reason> --senior
 ```
 
 ### Forbidden tool patterns (living registry)

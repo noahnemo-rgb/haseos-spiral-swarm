@@ -691,7 +691,7 @@ class QueenBee:
         notable = self._notable_competence_changes(experiences)
         recent = experiences[-4:]
         print(f"\n⚖️  Promotion briefing {infant.get('id')}")
-        print("   HITL only — you are the sole decision maker. No senior roster write.")
+        print("   HITL only — you are the sole decision maker. cert write attempted; roster is still HITL.")
         print(spiral_harness.ethical_kernel_presence_line())
         print(
             "   This action remains under the Ethical Kernel and Light-Keeper "
@@ -729,10 +729,15 @@ class QueenBee:
         print("   ── This action ──")
         print(f"   reason:      {reason}")
         print("   effect:      promoted=true, sandbox_tier=wading, academy listed_by=promote")
-        print("   roster:      none")
+        print("   roster:      cert write attempted; roster is still HITL")
 
-    def promote_infant_by_id(self, infant_id: str, reason: str | None = None):
-        """HITL promotion marker. Briefing + audit trail. Does not write the senior roster."""
+    def promote_infant_by_id(
+        self,
+        infant_id: str,
+        reason: str | None = None,
+        role: str = "infant",
+    ):
+        """HITL promotion marker. Briefing + audit trail + DSM cert write attempt."""
         infant = self._find_infant(infant_id)
         if not infant:
             print(f"Infant not found: {infant_id}")
@@ -772,7 +777,7 @@ class QueenBee:
             exp_type="promote",
             source="/promote",
             outcome=(
-                "HITL promoted; no senior roster write"
+                "HITL promoted; cert write attempted; roster is still HITL"
                 if not already
                 else "already promoted; HITL reason/history updated"
             ),
@@ -790,7 +795,39 @@ class QueenBee:
         print("   academy:     listed_by=promote")
         print(f"   history:     {len(infant.get('promotion_history') or [])} event(s)")
         print(f"   experience:  {record.get('id')}  [promote]")
-        print("   No senior roster write. You remain the sole decision maker.")
+        print("   cert write attempted; roster is still HITL. You remain the sole decision maker.")
+        usb_image = None
+        seats = self._nodes_holding(infant.get("id"))
+        if seats:
+            farm = self._get_nursery()
+            if farm is not None:
+                node_id = seats[0]
+                try:
+                    node = farm.get_node(node_id)
+                    candidate = node.state.get("path") or farm._default_path(node_id)
+                except KeyError:
+                    candidate = str(PROJECT_ROOT / "usb_states" / f"{node_id}.json")
+                if candidate and Path(candidate).is_file():
+                    usb_image = str(candidate)
+        try:
+            import haos_dsm_promote
+
+            cert_result = haos_dsm_promote.promote_to_usb_cert(
+                sovereign_id=str(infant.get("id") or infant_id),
+                role=role or "infant",
+                reason=explicit,
+                usb_image=usb_image,
+            )
+        except Exception as exc:
+            cert_result = {
+                "ok": False,
+                "reason": f"CERT_WRITE_FAILED:{type(exc).__name__}",
+                "cert_written": False,
+            }
+        if cert_result.get("ok"):
+            print(f"   cert written: {cert_result.get('role')} → {cert_result.get('dest')}")
+        else:
+            print(f"   cert skipped: {cert_result.get('reason')}")
 
     def assign_infant_task(
         self,
@@ -4296,14 +4333,20 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
                         self.deactivate_infant_by_id(infant_id)
                 elif user_input.startswith("/promote"):
                     rest = user_input[8:].strip()
+                    promote_role = "infant"
+                    tokens = rest.split()
+                    if tokens and tokens[-1] == "--senior":
+                        promote_role = "senior"
+                        rest = " ".join(tokens[:-1]).strip()
                     if not rest:
-                        print("Usage: /promote <id> <reason>")
+                        print("Usage: /promote <id> <reason> [--senior]")
                         print("   HITL only. Shows a promotion briefing, then records promoted=true.")
-                        print("   Reason is strongly encouraged and stored. No senior roster write.")
+                        print("   Reason is strongly encouraged and stored. cert write attempted; roster is still HITL.")
+                        print("   Default cert role is infant. Trailing --senior writes a senior cert.")
                     else:
                         parts = rest.split(None, 1)
                         reason = parts[1] if len(parts) > 1 else None
-                        self.promote_infant_by_id(parts[0], reason)
+                        self.promote_infant_by_id(parts[0], reason, role=promote_role)
                 elif user_input == "/task" or user_input.startswith("/task "):
                     rest = user_input[5:].strip()
                     talk = False
@@ -4430,7 +4473,7 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
                         print("       /academy review <id>")
                         print("   /academy — list candidates with competence, review, and promotion status")
                         print("   /academy review <id> — structured evaluation (no auto-promote)")
-                        print("   /promote <id> <reason> — HITL briefing + promote (no senior roster)")
+                        print("   /promote <id> <reason> [--senior] — HITL briefing + promote; cert write attempted; roster is still HITL")
                         print("   /experiences <id> [n] — last N experience records")
                         print("   /experiences status — footprint across infants + Harness log")
                         print("   /experiences dissent <id> <ex-id> — HITL unique-evidence mark")
