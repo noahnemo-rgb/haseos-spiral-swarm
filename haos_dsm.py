@@ -647,8 +647,9 @@ class DSMGate:
             if forbidden_tools_path is not None
             else default_forbidden_tools_path()
         )
-        self.declared_tools: set[str] = {str(t) for t in (declared_tools or set())}
-        self.allowed_hosts: set[str] = {
+        # Base lists = gate/registry defaults. Live WorldSlice = intersection with cert.
+        self._base_tools: set[str] = {str(t) for t in (declared_tools or set())}
+        self._base_hosts: set[str] = {
             str(h).lower()
             for h in (
                 allowed_hosts
@@ -656,6 +657,8 @@ class DSMGate:
                 else DEFAULT_ALLOWED_HOSTS
             )
         }
+        self.declared_tools: set[str] = set(self._base_tools)
+        self.allowed_hosts: set[str] = set(self._base_hosts)
         self.frozen: bool = False
         self.freeze_reason: str = ""
         self.last_decision: dict[str, Any] = {}
@@ -670,9 +673,48 @@ class DSMGate:
         if cert is not None:
             self.bind_cert(cert)
 
+    def intersect_slice_hosts(self, cert: dict | None) -> set[str]:
+        """Gate default ∩ cert.slice_hosts. Empty cert hosts → empty (fail closed)."""
+        if not isinstance(cert, dict):
+            return set()
+        raw = cert.get("slice_hosts")
+        if not isinstance(raw, (list, tuple, set, frozenset)):
+            return set()
+        cert_hosts = {str(h).lower().strip() for h in raw if str(h).strip()}
+        if not cert_hosts:
+            return set()
+        return {h for h in self._base_hosts if h in cert_hosts}
+
+    def intersect_slice_tools(self, cert: dict | None) -> set[str]:
+        """Registry/base ∩ cert.slice_tools, then scrub sealed+living forbids.
+
+        Empty cert tools → empty (fail closed, not allow-all).
+        """
+        if not isinstance(cert, dict):
+            return set()
+        raw = cert.get("slice_tools")
+        if not isinstance(raw, (list, tuple, set, frozenset)):
+            return set()
+        cert_tools = {str(t).strip() for t in raw if str(t).strip()}
+        if not cert_tools:
+            return set()
+        names = {t for t in self._base_tools if t in cert_tools}
+        return {n for n in names if n and not self.tool_forbidden(n)}
+
+    def apply_world_slice(self, cert: dict | None = None) -> None:
+        """Install live WorldSlice from the bound/candidate cert onto the gate."""
+        candidate = cert if cert is not None else self.active_cert
+        if not isinstance(candidate, dict):
+            self.allowed_hosts = set(self._base_hosts)
+            self.declared_tools = set(self._base_tools)
+            return
+        self.allowed_hosts = self.intersect_slice_hosts(candidate)
+        self.declared_tools = self.intersect_slice_tools(candidate)
+
     def bind_cert(self, cert: dict | None) -> None:
-        """Attach the inspectable cert used for admit trust checks."""
+        """Attach the inspectable cert; its fields become the live WorldSlice."""
         self.active_cert = dict(cert) if isinstance(cert, dict) else None
+        self.apply_world_slice()
 
     def load_forbidden_tools(self) -> dict:
         """Load living forbidden registry; sealed baseline always remains."""
@@ -954,6 +996,8 @@ class DSMGate:
             "cert_status": result.get("status"),
         }
         if result.get("ok"):
+            # Live cert fields are the WorldSlice for this admit.
+            self.apply_world_slice(candidate)
             return None
         reason = str(result.get("reason") or REASON_CERT_INVALID)
         return self._freeze(reason, detail)

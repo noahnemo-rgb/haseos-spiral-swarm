@@ -109,8 +109,9 @@ def mint_haseos_cert(
 ) -> dict:
     """HITL/tests: mint an inspectable HMAC-signed HASEOS cert.
 
-    D11 uses the Keeper HMAC secret. Documented temporary trust root;
-    IDAO-root certs come later.
+    ``slice_hosts`` / ``slice_tools`` are the WorldSlice the gate intersects
+    with its defaults. D11 uses the Keeper HMAC secret. Documented temporary
+    trust root; IDAO-root certs come later.
     """
     key = secret.encode("utf-8") if isinstance(secret, str) else secret
     issued = _iso(issued_at if issued_at is not None else _utc_now())

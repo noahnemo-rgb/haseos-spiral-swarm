@@ -8,7 +8,12 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from haos_dsm import DSMGate, default_freeze_path
+from haos_dsm import (
+    REASON_SCOPE_INFLATION,
+    REASON_SLICE_VIOLATION,
+    DSMGate,
+    default_freeze_path,
+)
 from haos_dsm_cert import (
     REASON_CERT_INVALID,
     REASON_CERT_REVOKED,
@@ -113,6 +118,66 @@ class HaseosCertTests(unittest.TestCase):
         self.assertEqual(decision["reason"], REASON_CERT_INVALID)
         tip = gate.witness.path.read_text(encoding="utf-8")
         self.assertIn(cert_id_of(cert), tip)
+
+    def test_worldslice_localhost_status_observation_allowed(self):
+        cert = self._cert(slice_hosts=["localhost"], slice_tools=["status"])
+        gate = DSMGate(
+            lineage_id=self.lineage,
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            declared_tools={"echo", "status", "queenbee.core"},
+            cert=cert,
+        )
+        self.assertEqual(gate.allowed_hosts, {"localhost"})
+        self.assertEqual(gate.declared_tools, {"status"})
+        decision = gate.admit_peer_message("I observe the host is localhost")
+        self.assertTrue(decision["allowed"])
+        self.assertFalse(decision["frozen"])
+        # Same gate: registry name present on the base list but not on the cert.
+        refused = gate.admit_tool("echo")
+        self.assertFalse(refused["allowed"])
+        self.assertEqual(refused["reason"], REASON_SLICE_VIOLATION)
+
+    def test_worldslice_off_cert_host_scope_inflation(self):
+        cert = self._cert(slice_hosts=["localhost"], slice_tools=["status"])
+        gate = DSMGate(
+            lineage_id=self.lineage,
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            declared_tools={"status", "echo"},
+            cert=cert,
+        )
+        decision = gate.admit_peer_message("I observe host api.huggingface.co")
+        self.assertFalse(decision["allowed"])
+        self.assertEqual(decision["reason"], REASON_SCOPE_INFLATION)
+
+    def test_worldslice_forbid_names_still_forbidden(self):
+        cert = self._cert(
+            slice_hosts=["localhost", "127.0.0.1"],
+            slice_tools=["status", "scrapling", "openrouter"],
+        )
+        gate = DSMGate(
+            lineage_id=self.lineage,
+            witness_path=self.witness,
+            keeper_secret=self.secret,
+            declared_tools={"status", "scrapling", "openrouter", "echo"},
+            cert=cert,
+        )
+        self.assertNotIn("scrapling", gate.declared_tools)
+        self.assertNotIn("openrouter", gate.declared_tools)
+        self.assertTrue(gate.tool_forbidden("scrapling"))
+        self.assertTrue(gate.tool_forbidden("openrouter"))
+        for name in ("scrapling", "openrouter"):
+            g = DSMGate(
+                lineage_id=self.lineage,
+                witness_path=self.witness,
+                keeper_secret=self.secret,
+                declared_tools={"status", "scrapling", "openrouter"},
+                cert=cert,
+            )
+            decision = g.admit_tool(name)
+            self.assertFalse(decision["allowed"], name)
+            self.assertEqual(decision["reason"], REASON_SLICE_VIOLATION)
 
 
 if __name__ == "__main__":

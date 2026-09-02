@@ -142,7 +142,9 @@ def attach_gate(
 
     Loads cert JSON from ``cert`` or ``cert_path`` / default QueenBee cert file.
     Does **not** mint a cert inside QueenBee. Missing cert → admit fails closed
-    (CERT_INVALID). Keeper secret may come from env for HMAC verify only — it is
+    (CERT_INVALID). A bound live cert is the WorldSlice: hosts/tools become
+    the intersection of gate defaults and ``slice_*`` (empty cert lists fail
+    closed). Keeper secret may come from env for HMAC verify only — it is
     never stored as an attribute on the QueenBee/host object.
     """
     secret = keeper_secret

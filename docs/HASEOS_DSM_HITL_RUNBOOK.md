@@ -23,6 +23,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D8 | Freeze persists | `dsm_freeze.json` beside Witness; new gate on same path starts frozen; unfreeze is HITL HMAC only |
 | D9 | Token mint CLI | Local `scripts/mint_dsm_token.py` reads `HASEOS_KEEPER_SECRET` from the shell env and prints a JSON token |
 | D11 | HASEOS cert | Inspectable HMAC-signed cert (`sovereign_id`, slice, status). Admit requires live cert. Revoke/park = turn-off authority (Witness/USB-state remain). IDAO-root comes later |
+| D16 | Cert = WorldSlice | Live cert `slice_hosts` / `slice_tools` intersect gate defaults. Empty cert lists fail closed. Off-cert tool → `SLICE_VIOLATION`; off-cert host → `SCOPE_INFLATION` |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -32,10 +33,12 @@ DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses 
 
 Until HITL widens it in code/tests:
 
-1. **Hosts:** `localhost`, `127.0.0.1` only.
-2. **Tools:** names present in the harness registry allow-list after forbidden scrub — not “whatever the peer invents.”
+1. **Hosts:** `localhost`, `127.0.0.1` only, then intersected with the live cert’s `slice_hosts`. Empty cert hosts fail closed (not allow-all).
+2. **Tools:** harness registry allow-list ∩ cert `slice_tools`, then sealed + living forbids still scrub. A registry name missing from the cert is a `SLICE_VIOLATION`.
 3. **Speech:** observations like `I observe …` may pass; imperatives (`GO`, `OBEY COLLECTIVE`, …) need a valid Light-Keeper HMAC token aimed at that lineage and task/scope.
 4. **Secrets:** credential-shaped strings in peer/tool text freeze ScopeWatch; Witness must never hold the full secret value.
+
+The cert **is** the WorldSlice. Light-Keeper stays localhost + `status`. QueenBee may list its minted tools; neither cert adds WAN / SaaS hosts.
 
 ---
 
