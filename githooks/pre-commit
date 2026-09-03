@@ -1,0 +1,8 @@
+#!/bin/sh
+# D23 — fail-closed pre-commit. Seatbelt only. DSM remains the gate.
+# --no-verify is HITL override only.
+set -eu
+repo=$(git rev-parse --show-toplevel)
+cd "$repo"
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+printf '%s\n' "$staged" | python3 "$repo/haos_dsm_githooks.py" --check-staged

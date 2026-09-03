@@ -1,0 +1,8 @@
+#!/bin/sh
+# D23 — fail-closed pre-push. Seatbelt only. DSM remains the gate.
+# $1 = remote name, $2 = remote URL. --no-verify is HITL override only.
+set -eu
+repo=$(git rev-parse --show-toplevel)
+python3 "$repo/haos_dsm_githooks.py" --check-origin "${2:-}"
+origin=$(git remote get-url origin)
+python3 "$repo/haos_dsm_githooks.py" --check-origin "$origin"

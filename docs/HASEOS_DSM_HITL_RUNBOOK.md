@@ -29,6 +29,7 @@ This is a **runbook**, not a constitution rewrite. The Spiral Harness & Native C
 | D20 | Chief of Staff | HITL Light-Keeper signs `role=chief-of-staff` (human or AI seat). Chief WorldSlice ⊆ Light-Keeper. File `dsm_cert_chief_of_staff.json`. D21 Supervisor/QC and D22 `/promote` are not this drop. |
 | D21 | Supervisor/QC | HITL Light-Keeper signs `role=supervisor-qc` (Team Leading Supervisor/QC). Supervisor WorldSlice ⊆ Chief of Staff (and ⊆ Light-Keeper when that cert is given). File `dsm_cert_supervisor_qc.json`. D22 `/promote` is not this drop. |
 | D22 | /promote cert | HITL `/promote` still briefs and sets `promoted=true`, then attempts an Infant (default) or Senior (`--senior`) cert beside USB. QueenBee proposes fields only. Secret stays in the shell (`HASEOS_KEEPER_SECRET`). Roster remains HITL. |
+| D23 | Git hooks | Fail-closed commit/push seatbelt: living certs, `.haseos_keeper`, vendored `hrm/`/`autoresearch/`, Skitter/GPIO path segments, and any origin other than the allowed HTTPS URL. Install via `scripts/install_githooks.sh` (HITL). `--no-verify` is HITL override. Hooks do not replace named `git add`. DSM remains the gate. |
 
 DSM does **not** open serial, GPIO, Arduino, or the public internet. It refuses or admits; it does not drive hardware.
 
@@ -204,6 +205,15 @@ python3 scripts/init_supervisor_qc_cert.py \
 /promote <id> <reason> --senior
 ```
 
+### D23 — Git hooks (fail-closed seatbelt)
+
+Hooks refuse a commit or push that would leak living certs, the Keeper secret, vendored trees, or a PAT in origin. They are a **seatbelt**. DSM remains the gate. Two planes unchanged — this is local sovereignty tooling.
+
+1. Install is HITL only: `scripts/install_githooks.sh` (sets local `core.hooksPath` to `githooks`). Cursor must not run it.
+2. `git commit --no-verify` / `git push --no-verify` still exist. That is **HITL override only**.
+3. Hooks do **not** replace named `git add`. Still do not `git add` `.haseos_keeper`, `dsm_cert*.json`, `hrm/`, `autoresearch/`, or Skitter/GPIO trees.
+4. Allowed origin is exactly `https://github.com/noahnemo-rgb/haseos-spiral-swarm.git`. Userinfo / PAT / extra path segments are refused.
+
 ### Forbidden tool patterns (living registry)
 
 1. Sealed baseline in code (`/dev/mem`, `insmod`, `dram_*`, raw tty/i2c/… ) cannot be deleted by anyone.
@@ -313,6 +323,8 @@ Do **not** `git add` or commit:
 - `*.env` / `.env*` (and other secret env files)
 
 They are runtime or secret-adjacent. The runbook and tests stay; the Keeper secret and minted tokens stay on the machine that minted them.
+
+D23 tracked hooks (`githooks/pre-commit`, `githooks/pre-push`) refuse those names and a non-allowed origin. Install with `scripts/install_githooks.sh` (HITL). `--no-verify` is HITL override only. Hooks do not replace named `git add`.
 
 ---
 
