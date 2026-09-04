@@ -1109,6 +1109,103 @@ class QueenBee:
         else:
             print(f"Infant {infant.get('id')} is now ACTIVE.")
 
+    def autoresearch_trial_status(self, infant_id: str | None = None):
+        """Inspect keep/discard trials. Not QueenBee.autoresearch() /research."""
+        if infant_id:
+            infants = [self._find_infant(infant_id)]
+            if infants[0] is None:
+                print(f"Infant not found: {infant_id}")
+                return
+        else:
+            infants = list(self.memory.get("active_infants") or [])
+        if not infants:
+            print("No infants. Use /spawn, then /autoresearch <id> [hypothesis].")
+            return
+        print("\n🔎 Autoresearch trials (Memory Sovereignty)")
+        print("   Judge: haseos.dsm_ethics.v1  surface: task  Mouth /research is separate.")
+        for infant in infants:
+            rows = infant.get("autoresearch_trials") or []
+            print(
+                f"   {infant.get('id')}: trials={len(rows)}  "
+                f"seq={infant.get('autoresearch_seq', 0)}  "
+                f"task={infant.get('task')!r}"
+            )
+            if rows:
+                last = rows[-1]
+                print(f"      last: {last.get('outcome')}  {last.get('id')}")
+
+    def run_autoresearch_trial(
+        self,
+        infant_id: str,
+        hypothesis: str | None = None,
+        talk: bool = False,
+    ):
+        """HITL trial writeback. Does not call QueenBee.autoresearch()."""
+        infant = self._require_active_infant(infant_id)
+        if not infant:
+            return
+        text = (hypothesis or "").strip() or str(infant.get("task") or "")
+        try:
+            import haos_autoresearch
+            import haos_dsm  # noqa: F401 — frozen judge must be importable
+
+            result = haos_autoresearch.apply_trial(
+                infant, text, judge_available=True
+            )
+        except Exception:
+            print("JUDGE_MISSING")
+            return
+        status = result.get("status")
+        if status == "refuse":
+            print("JUDGE_MISSING")
+            return
+        trial = result.get("trial") or {}
+        self._append_experience(
+            infant,
+            infant.get("task", ""),
+            f"autoresearch {status}",
+            exp_type="autoresearch",
+            source="/autoresearch",
+            outcome=str(status),
+            related={
+                "trial_id": trial.get("id"),
+                "judge_id": trial.get("judge_id"),
+            },
+            tags=["autoresearch", str(status)],
+        )
+        print(f"   autoresearch {status} for {infant.get('id')}")
+        print(f"   task: {infant.get('task')}")
+        if talk:
+            self._infant_http_turn(
+                infant,
+                f"Autoresearch {status}. Task: {infant.get('task')}. "
+                "Reply in one short sentence.",
+            )
+
+    def _dispatch_autoresearch(self, rest: str):
+        rest = (rest or "").strip()
+        if rest == "status" or rest.startswith("status "):
+            hint = rest[6:].strip() or None
+            self.autoresearch_trial_status(hint)
+            return
+        talk = False
+        kept: list[str] = []
+        for token in rest.split():
+            if token == "--talk":
+                talk = True
+            else:
+                kept.append(token)
+        if not kept:
+            print("Usage: /autoresearch status")
+            print("       /autoresearch [--talk] <id> [hypothesis...]")
+            print("   Keep/discard writeback on infant[\"task\"]. Not /research.")
+            return
+        self.run_autoresearch_trial(
+            kept[0],
+            hypothesis=" ".join(kept[1:]) if len(kept) > 1 else None,
+            talk=talk,
+        )
+
     def _academy_rec_for(self, infant: dict | None) -> str:
         if not infant:
             return "-"
@@ -4278,7 +4375,7 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
 
     def run(self):
         print("\nQueenBee ready (v7.1 ULTIMATE MAXIMUM POLISH). Type 'exit' or 'quit' to stop.")
-        print("Commands: /research <query> | /hrm <message> | /status | /save | /load | /ternary <check> | /spawn [--talk] [task] | /task [--talk] <id> <desc> | /pool | /train [--talk] <id> | /cycle <id> [n] [--talk] | /cycle cohort <name> [n] [--talk] | /sleep <id> | /wake <id> | /cohort ... | /talk [--talk] <from> <to> <msg> | /academy | /academy review <id> | /summary <id> | /experiences <id> [n] | /experiences status | /experiences prune | /memory loop <id> | /memory list | /harness | /harness ethics | /harness register | /harness experiences | /modules | /swarm | /export <id> [--to-node <node>] | /nursery | /usb ... | /farm status | /farm cycle [n] | /infants | /deactivate <id> | /promote <id> <reason>")
+        print("Commands: /research <query> | /hrm <message> | /status | /save | /load | /ternary <check> | /spawn [--talk] [task] | /task [--talk] <id> <desc> | /pool | /train [--talk] <id> | /cycle <id> [n] [--talk] | /cycle cohort <name> [n] [--talk] | /sleep <id> | /wake <id> | /cohort ... | /talk [--talk] <from> <to> <msg> | /academy | /academy review <id> | /summary <id> | /experiences <id> [n] | /experiences status | /experiences prune | /memory loop <id> | /memory list | /harness | /harness ethics | /harness register | /harness experiences | /modules | /swarm | /export <id> [--to-node <node>] | /nursery | /usb ... | /farm status | /farm cycle [n] | /infants | /deactivate <id> | /promote <id> <reason> | /autoresearch status | /autoresearch [--talk] <id> [hypothesis]")
         print("💡 Just type anything for normal HRM synergy!\n")
         
         while True:
@@ -4291,7 +4388,9 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
                     print("QueenBee shutting down — infants marked INACTIVE. Memory saved.")
                     break
                 
-                if user_input.startswith("/research "):
+                if user_input == "/autoresearch" or user_input.startswith("/autoresearch "):
+                    self._dispatch_autoresearch(user_input[13:].strip())
+                elif user_input.startswith("/research "):
                     query = user_input[10:].strip()
                     print(self.autoresearch(query))
                 elif user_input.startswith("/hrm "):

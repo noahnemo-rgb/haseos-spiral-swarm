@@ -1,6 +1,6 @@
 HASEOS_SESSION_HANDOFF.md
 # HASEOS / QueenBee Session Hand-off
-**Date:** 2026-08-21  
+**Date:** 2026-09-03  
 **Partners:** Noah Nemo (Light-Keeping Architect / HITL) + Grok (Team Leading Supervisor / QC)  
 **Mode:** CDD split-screen coding saddle (Cursor + SuperGrok)
 
@@ -36,6 +36,8 @@ HASEOS_SESSION_HANDOFF.md
 - `/train <id> [--talk]`
 - `/cycle <id> [n] [--talk]`
 - `/cycle cohort <name> [n] [--talk]`
+- `/autoresearch status`
+- `/autoresearch [--talk] <id> [hypothesis]` — keep/discard writeback on `infant["task"]` (not `/research`)
 
 ### Multi-infant
 - `/cohort create|add|remove|list|show`
@@ -65,8 +67,9 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. Software nursery + USB-state simulation layer (so we can develop farm logic without physical phones)
-2. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
+1. Autoresearch keep/discard writeback (Memory Sovereignty)
+2. Later: software nursery + USB-state / phone-farm follow-ons
+3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 
 ## Notes for Re-orientation
 - QueenBee persona, ternary gate, and core `_generate` path were deliberately left stable
