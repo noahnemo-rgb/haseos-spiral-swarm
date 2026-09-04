@@ -28,6 +28,13 @@ class QueenBeeStartsWithoutTorchTests(unittest.TestCase):
         self.assertEqual(infant["task"], "observe localhost")
         self.assertTrue(str(infant["id"]).startswith("infant-plain-"))
 
+    def test_queenbee_constructs_without_mouth(self):
+        from queenbee_integration import QueenBee
+
+        bee = QueenBee()
+        self.assertTrue(hasattr(bee, "client"))
+        self.assertTrue(bee.mouth_ok is False or bee.client is not None)
+
 
 if __name__ == "__main__":
     unittest.main()

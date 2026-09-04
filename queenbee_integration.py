@@ -32,6 +32,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 INFANT_EXPERIENCE_CAP = 40
 EXPERIENCE_PRUNE_FLOOR = spiral_harness.PRUNE_SAFETY_FLOOR
 REASON_HRM_UNAVAILABLE = "HRM_UNAVAILABLE"
+REASON_MOUTH_UNREACHABLE = "MOUTH_UNREACHABLE"
 _HRM_ORCHESTRATOR = None
 _HRM_TRIED = False
 
@@ -118,10 +119,13 @@ Every response must be helpful, personal, clear, short, and perfectly in ternary
 class QueenBee:
     def __init__(self):
         self.client = InferenceClient()
+        self.mouth_ok = False
         try:
             self.client.health()
-        except InferenceError as exc:
-            raise InferenceError(str(exc)) from exc
+            self.mouth_ok = True
+        except InferenceError:
+            self.mouth_ok = False
+            print("Mouth parked")
 
         self.memory = {
             "history": [],
@@ -521,6 +525,9 @@ class QueenBee:
         return notable[-limit:]
 
     def _infant_http_turn(self, infant: dict, user_text: str) -> str | None:
+        if not getattr(self, "mouth_ok", False):
+            print(REASON_MOUTH_UNREACHABLE)
+            return None
         try:
             reply = self.client.chat(
                 messages=[
@@ -545,8 +552,9 @@ class QueenBee:
             )
             print(f"   Infant {infant.get('id')} says: {reply}")
             return reply
-        except InferenceError as exc:
-            print(f"   Infant HTTP turn skipped: {exc}")
+        except InferenceError:
+            self.mouth_ok = False
+            print(REASON_MOUTH_UNREACHABLE)
             return None
 
     def spawn_infant(self, task: str | None = None, talk: bool = False):
@@ -4397,33 +4405,41 @@ Ternary score: """
             return TERNARY_NEUTRAL
 
     def autoresearch(self, query: str, depth: int = 1) -> str:
-        print("🧠 Starting autoresearch (Ternary First)...")
-        research_log = [f"Initial query: {query}"]
-        
-        for step in range(depth):
-            print(f"🧠 Research step {step+1}/{depth}...", end=" ", flush=True)
-            research_prompt = f"""Autoresearch step {step+1}/{depth} (Ternary First):
+        if not getattr(self, "mouth_ok", False):
+            print(REASON_MOUTH_UNREACHABLE)
+            return REASON_MOUTH_UNREACHABLE
+        try:
+            print("🧠 Starting autoresearch (Ternary First)...")
+            research_log = [f"Initial query: {query}"]
+
+            for step in range(depth):
+                print(f"🧠 Research step {step+1}/{depth}...", end=" ", flush=True)
+                research_prompt = f"""Autoresearch step {step+1}/{depth} (Ternary First):
 Current knowledge: {' | '.join(research_log)}
 Next research angle (one short sentence only): """
-            result = self._generate(research_prompt, max_tokens=128, temperature=0.7)
-            research_log.append(result)
-            print("done")
-            
-            alignment = self.ternary_decision(result)
-            if alignment == TERNARY_OPPOSE:
-                research_log.append("⚠️ Opposition detected — re-aligning...")
-                break
-        
-        print("🧠 Synthesizing final answer...", end=" ", flush=True)
-        synth_prompt = f"""Noah Nemo just said: {query}
+                result = self._generate(research_prompt, max_tokens=128, temperature=0.7)
+                research_log.append(result)
+                print("done")
+
+                alignment = self.ternary_decision(result)
+                if alignment == TERNARY_OPPOSE:
+                    research_log.append("⚠️ Opposition detected — re-aligning...")
+                    break
+
+            print("🧠 Synthesizing final answer...", end=" ", flush=True)
+            synth_prompt = f"""Noah Nemo just said: {query}
 Research notes: {' | '.join(research_log)}
 Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis naturally. Keep it short, clear, playful, and fun. Speak directly to him. Never be generic or use the fallback line."""
-        final = self._generate(synth_prompt, max_tokens=256, temperature=0.5)
-        print("done")
-        
-        self.memory["research_logs"].append({"query": query, "log": research_log, "final": final})
-        self.save_memory()
-        return final
+            final = self._generate(synth_prompt, max_tokens=256, temperature=0.5)
+            print("done")
+
+            self.memory["research_logs"].append({"query": query, "log": research_log, "final": final})
+            self.save_memory()
+            return final
+        except InferenceError:
+            self.mouth_ok = False
+            print(REASON_MOUTH_UNREACHABLE)
+            return REASON_MOUTH_UNREACHABLE
 
     def hrm_synergy(self, human_input: str) -> str:
         if _try_hrm_orchestrator() is None:
