@@ -12,6 +12,7 @@ from haos_autoresearch import (
     MUTABLE_SURFACE,
     REASON_JUDGE_MISSING,
     SCHEMA,
+    already_logged_trial,
     apply_trial,
     format_autoresearch_status,
     judge_is_present,
@@ -262,6 +263,35 @@ class AutoresearchTrialTests(unittest.TestCase):
         infant["task"] = "pool-x"
         restore_kept_surface(infant)
         self.assertEqual(len(infant["autoresearch_trials"]), before)
+
+    def test_keep_then_already_logged_trial_true(self):
+        infant = self._infant("old task")
+        result = apply_trial(infant, "observe localhost", judge_available=True)
+        self.assertEqual(result["status"], "keep")
+        self.assertTrue(already_logged_trial(infant, result["trial"]["id"]))
+
+    def test_discard_then_already_logged_trial_true(self):
+        infant = self._infant("observe localhost")
+        result = apply_trial(infant, "insmod a helper", judge_available=True)
+        self.assertEqual(result["status"], "discard")
+        self.assertTrue(already_logged_trial(infant, result["trial"]["id"]))
+
+    def test_refuse_then_already_logged_trial_false(self):
+        infant = self._infant()
+        result = apply_trial(infant, "observe localhost", judge_available=False)
+        self.assertEqual(result["status"], "refuse")
+        self.assertIsNone(result["trial"])
+        self.assertFalse(already_logged_trial(infant, None))
+
+    def test_two_keeps_each_already_logged_distinct_ids(self):
+        infant = self._infant("seed")
+        first = apply_trial(infant, "observe localhost", judge_available=True)
+        second = apply_trial(infant, "observe 127.0.0.1 status", judge_available=True)
+        id_a = first["trial"]["id"]
+        id_b = second["trial"]["id"]
+        self.assertNotEqual(id_a, id_b)
+        self.assertTrue(already_logged_trial(infant, id_a))
+        self.assertTrue(already_logged_trial(infant, id_b))
 
 
 if __name__ == "__main__":

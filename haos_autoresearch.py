@@ -165,6 +165,19 @@ def append_candidate_experience(infant: dict, trial: dict, status: str) -> dict[
     return row
 
 
+def already_logged_trial(infant: dict | None, trial_id: str | None) -> bool:
+    """True iff an experience row already records this trial_id (skip second append)."""
+    if not trial_id or not isinstance(infant, dict):
+        return False
+    for row in infant.get("experiences") or []:
+        if not isinstance(row, dict):
+            continue
+        related = row.get("related")
+        if isinstance(related, dict) and related.get("trial_id") == trial_id:
+            return True
+    return False
+
+
 def last_trial_context(infant: dict | None) -> dict[str, Any] | None:
     """Last AutoresearchTrial as a small rememberable dict, or None."""
     if not isinstance(infant, dict):

@@ -1182,12 +1182,7 @@ class QueenBee:
             return
         trial = result.get("trial") or {}
         tid = trial.get("id")
-        rows = infant.get("experiences") or []
-        last = rows[-1] if rows else None
-        last_tid = None
-        if isinstance(last, dict) and isinstance(last.get("related"), dict):
-            last_tid = last["related"].get("trial_id")
-        if last_tid != tid:
+        if not haos_autoresearch.already_logged_trial(infant, tid):
             self._append_experience(
                 infant,
                 infant.get("task", ""),
