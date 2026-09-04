@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Literal
 
 from inference_client import InferenceClient, InferenceError
-from autoresearch_integration import HrmOrchestrator
 from wading_pool import WADING_POOL, add_candidates, get_candidates, select_task
 import infinity_brain
 import usb_state
@@ -32,6 +31,38 @@ EXPORT_DIR = "exports"
 PROJECT_ROOT = Path(__file__).resolve().parent
 INFANT_EXPERIENCE_CAP = 40
 EXPERIENCE_PRUNE_FLOOR = spiral_harness.PRUNE_SAFETY_FLOOR
+REASON_HRM_UNAVAILABLE = "HRM_UNAVAILABLE"
+_HRM_ORCHESTRATOR = None
+_HRM_TRIED = False
+
+
+def _try_hrm_orchestrator():
+    """Guest HRM. Import inside this function. Missing torch → None."""
+    global _HRM_ORCHESTRATOR, _HRM_TRIED
+    if _HRM_TRIED:
+        return _HRM_ORCHESTRATOR
+    _HRM_TRIED = True
+    try:
+        from autoresearch_integration import HrmOrchestrator
+
+        _HRM_ORCHESTRATOR = HrmOrchestrator()
+    except Exception:
+        _HRM_ORCHESTRATOR = None
+    return _HRM_ORCHESTRATOR
+
+
+def build_plain_infant(task: str | None = None) -> dict:
+    """Stdlib infant dict when HRM/torch is not present."""
+    initial_task = (task or "").strip() or "Basic HASEOS infant initialization"
+    stamp = datetime.now().strftime("%H%M%S")
+    return {
+        "id": f"infant-plain-{stamp}",
+        "task": initial_task,
+        "status": "ACTIVE",
+        "sandbox_tier": "nursery",
+        "experiences": [],
+        "competence_score": 0,
+    }
 
 # Lazy Software Nursery — created on first /usb, /nursery, or /farm command.
 # Software Nursery v0.1 is stable for the software phase.
@@ -521,15 +552,19 @@ class QueenBee:
     def spawn_infant(self, task: str | None = None, talk: bool = False):
         """Create one infant dict and store it. Optional short HTTP turn if talk=True."""
         initial_task = (task or "").strip() or "Basic HASEOS infant initialization"
-        hrm = HrmOrchestrator()
-        spawned = hrm.spawn_infant_sovereigns(
-            count=1,
-            initial_task=initial_task,
-        )
-        infant = spawned[-1] if spawned else None
-        if not infant:
-            print("Spawn failed — no infant returned.")
-            return None
+        hrm = _try_hrm_orchestrator()
+        infant = None
+        if hrm is not None:
+            spawned = hrm.spawn_infant_sovereigns(
+                count=1,
+                initial_task=initial_task,
+            )
+            infant = spawned[-1] if spawned else None
+            if not infant:
+                print("Spawn failed — no infant returned.")
+                return None
+        else:
+            infant = build_plain_infant(initial_task)
 
         self.memory.setdefault("active_infants", []).append(infant)
         infant.setdefault("experiences", [])
@@ -4391,6 +4426,9 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
         return final
 
     def hrm_synergy(self, human_input: str) -> str:
+        if _try_hrm_orchestrator() is None:
+            print(REASON_HRM_UNAVAILABLE)
+            return REASON_HRM_UNAVAILABLE
         ternary_score = self.ternary_decision(human_input)
         if ternary_score == TERNARY_OPPOSE:
             return "HRM re-alignment triggered. Please refine input for ternary harmony."
