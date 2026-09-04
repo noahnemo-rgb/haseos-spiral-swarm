@@ -13,6 +13,8 @@ from haos_autoresearch import (
     SCHEMA,
     apply_trial,
     judge_trial,
+    last_trial_context,
+    remember_on_cycle,
 )
 
 
@@ -93,6 +95,40 @@ class AutoresearchTrialTests(unittest.TestCase):
             [row["outcome"] for row in infant["autoresearch_trials"]],
         )
         self.assertEqual(woken["task"], infant["task"])
+
+    def test_last_trial_context_empty_infant_is_none(self):
+        self.assertIsNone(last_trial_context(self._infant()))
+        self.assertIsNone(last_trial_context({"id": "x", "autoresearch_trials": []}))
+
+    def test_last_trial_context_after_keep_has_outcome_and_reason(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe 127.0.0.1 status", judge_available=True)
+        ctx = last_trial_context(infant)
+        self.assertIsNotNone(ctx)
+        self.assertEqual(ctx["outcome"], "keep")
+        self.assertTrue(ctx["reason"])
+        self.assertEqual(ctx["trial_id"], infant["autoresearch_trials"][-1]["id"])
+        self.assertEqual(infant["autoresearch_trials"][-1].get("reason"), ctx["reason"])
+
+    def test_remember_on_cycle_stamps_baseline_without_changing_task(self):
+        infant = self._infant("hold this task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        task_before = infant["task"]
+        stamped = remember_on_cycle(infant)
+        self.assertIsNotNone(stamped)
+        self.assertEqual(infant["last_cycle_baseline"], stamped)
+        self.assertEqual(stamped["outcome"], "keep")
+        self.assertEqual(infant["task"], task_before)
+        self.assertEqual(len(infant["autoresearch_trials"]), 1)
+
+    def test_remember_on_cycle_after_discard_stamps_discard(self):
+        infant = self._infant("observe localhost")
+        apply_trial(infant, "insmod a helper", judge_available=True)
+        stamped = remember_on_cycle(infant)
+        self.assertIsNotNone(stamped)
+        self.assertEqual(stamped["outcome"], "discard")
+        self.assertEqual(infant["last_cycle_baseline"]["outcome"], "discard")
+        self.assertEqual(infant["task"], "observe localhost")
 
 
 if __name__ == "__main__":

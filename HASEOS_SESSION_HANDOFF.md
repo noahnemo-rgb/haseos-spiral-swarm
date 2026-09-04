@@ -67,7 +67,7 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. Autoresearch keep/discard writeback (Memory Sovereignty)
+1. D25 self-remembrant `/cycle` (last AutoresearchTrial baseline; `/cycle` does not run a new trial)
 2. Later: software nursery + USB-state / phone-farm follow-ons
 3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 

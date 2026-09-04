@@ -965,6 +965,18 @@ class QueenBee:
     def _run_cycle(self, infant: dict, n: int = 3, talk: bool = False, verbose: bool = True) -> dict:
         assigned = []
         replies = 0
+        try:
+            import haos_autoresearch
+
+            baseline = haos_autoresearch.remember_on_cycle(infant)
+        except Exception:
+            baseline = None
+        if baseline:
+            print(
+                f"   last trial: {baseline.get('outcome')}  {baseline.get('reason')}"
+            )
+        else:
+            print("   last trial: no prior trial")
         if verbose:
             print(f"🔄 Cycle {infant.get('id')}: {n} turn(s), talk={'on' if talk else 'off'}")
         for i in range(1, n + 1):
@@ -973,6 +985,12 @@ class QueenBee:
                     print(f"   Turn {i}/{n}: stopped — infant is {infant.get('status')}")
                 break
             result = self._train_turn(infant, talk=talk, exp_type="cycle", source="/cycle")
+            if baseline:
+                rows = infant.get("experiences") or []
+                if rows and isinstance(rows[-1], dict):
+                    related = rows[-1].setdefault("related", {})
+                    if isinstance(related, dict):
+                        related["last_trial_id"] = baseline.get("trial_id")
             pool_task = result["task"]
             assigned.append(pool_task["id"])
             if result["replied"]:

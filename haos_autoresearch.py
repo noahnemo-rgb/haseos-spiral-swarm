@@ -118,7 +118,43 @@ def apply_trial(
         metric=metric,
         outcome=outcome,
     )
+    trial["reason"] = judged.get("reason")
     if keep:
         infant[MUTABLE_SURFACE] = hypothesis
     infant["autoresearch_trials"].append(trial)
     return {"status": outcome, "trial": trial}
+
+
+def last_trial_context(infant: dict | None) -> dict[str, Any] | None:
+    """Last AutoresearchTrial as a small rememberable dict, or None."""
+    if not isinstance(infant, dict):
+        return None
+    rows = infant.get("autoresearch_trials")
+    if not isinstance(rows, list) or not rows:
+        return None
+    trial = rows[-1]
+    if not isinstance(trial, dict):
+        return None
+    reason = trial.get("reason")
+    if not reason:
+        metric = trial.get("metric")
+        if isinstance(metric, dict):
+            reason = metric.get("reason")
+    if not reason:
+        reason = trial.get("outcome")
+    return {
+        "trial_id": trial.get("id"),
+        "outcome": trial.get("outcome"),
+        "reason": reason,
+        "hypothesis": trial.get("hypothesis"),
+        "mutable_surface": trial.get("mutable_surface") or MUTABLE_SURFACE,
+    }
+
+
+def remember_on_cycle(infant: dict) -> dict[str, Any] | None:
+    """Stamp last trial onto last_cycle_baseline. Does not change task. No new trial."""
+    ctx = last_trial_context(infant)
+    if ctx is None:
+        return None
+    infant["last_cycle_baseline"] = dict(ctx)
+    return infant["last_cycle_baseline"]
