@@ -41,7 +41,8 @@ HASEOS_SESSION_HANDOFF.md
 
 ### Multi-infant
 - `/cohort create|add|remove|list|show`
-- `/talk <from> <to> <message> [--talk]`
+- `/family create|add|show` — HITL parent-child staging (children cannot create families)
+- `/talk <from> <to> <message> [--talk]` — pair ACL: unfamilied legacy, or same-family parent↔child / sibling↔sibling; else FAMILY_SLICE (no experience)
 - `/talk cohort <name> <from> <message> [--talk]`
 
 ### Promotion & Evaluation
@@ -67,15 +68,15 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. D32 REPL without Mouth (construct parks `:8080`; `/research` / HTTP fail closed). Parent-child after live prompt.
-2. Later: software nursery + USB-state / phone-farm follow-ons
-3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
+1. Later: software nursery + USB-state / phone-farm follow-ons
+2. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 
 ## Notes for Re-orientation
 - QueenBee persona, ternary gate, and core `_generate` path were deliberately left stable
 - Experience logging + competence scoring are working
 - Export format is intentionally shaped as future USB-state image
 - Conversation has been multi-day iterative build under CDD saddle
+- D33 parent-child talk ACL: `haos_family.talk_pair_allowed` after DSM `admit_peer_message`; cross-family pair talk prints FAMILY_SLICE and writes no experience
 
 ## How to Resume
 Start the new conversation with:

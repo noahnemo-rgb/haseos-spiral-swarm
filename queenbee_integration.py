@@ -135,12 +135,14 @@ class QueenBee:
             "academy_candidates": [],
             "cohorts": {},
             "cohort_activity": {},
+            "families": {},
         }
         self.load_memory()
         self.memory.setdefault("active_infants", [])
         self.memory.setdefault("academy_candidates", [])
         self.memory.setdefault("cohorts", {})
         self.memory.setdefault("cohort_activity", {})
+        self.memory.setdefault("families", {})
         # DSM — peer/tool gate. Loads dsm_cert_queenbee.json if present (cert JSON
         # only). Keeper secret stays in env / gate private — never on this object.
         haos_dsm_hook.attach_gate(self)
@@ -1409,6 +1411,96 @@ class QueenBee:
             print(f"      node:       {self._seat_label(infant.get('id'))}")
             print(f"      academy:    {self._academy_rec_for(infant)}")
             print(f"      last talk:  {last_bit}")
+
+    def family_create(self, name: str, parent_id: str):
+        """HITL: one parent infant owns a family. Children cannot create families."""
+        name = (name or "").strip()
+        if not name or not (parent_id or "").strip():
+            print("Usage: /family create <name> <parent_id>")
+            return
+        parent = self._find_infant(parent_id)
+        if not parent:
+            print(f"Infant not found: {parent_id}")
+            return
+        if parent.get("family_role") == "child":
+            print("Children cannot create families.")
+            return
+        families = self.memory.setdefault("families", {})
+        if name in families:
+            print(f"Family {name} already exists.")
+            return
+        import haos_family
+
+        haos_family.attach_parent(name, parent)
+        families[name] = haos_family.family_record(str(parent.get("id")), [])
+        self.save_memory()
+        print(f"Family {name} created. parent={parent.get('id')}")
+
+    def family_add(self, name: str, child_id: str):
+        families = self.memory.setdefault("families", {})
+        if name not in families:
+            print(f"Family not found: {name}")
+            return
+        child = self._find_infant(child_id)
+        if not child:
+            print(f"Infant not found: {child_id}")
+            return
+        parent = self._find_infant(families[name].get("parent") or "")
+        if not parent:
+            print(f"Family {name} has no parent infant.")
+            return
+        if child.get("id") == parent.get("id"):
+            print("Parent cannot be added as a child.")
+            return
+        import haos_family
+
+        haos_family.attach_child(name, child, parent)
+        kids = families[name].setdefault("children", [])
+        iid = child.get("id")
+        if iid not in kids:
+            kids.append(iid)
+        self.save_memory()
+        print(f"Added {iid} to family {name} as child of {parent.get('id')}")
+
+    def family_show(self, name: str | None = None):
+        families = self.memory.get("families") or {}
+        if name:
+            if name not in families:
+                print(f"Family not found: {name}")
+                return
+            items = [(name, families[name])]
+        else:
+            items = list(families.items())
+        if not items:
+            print("No families. Use /family create <name> <parent_id>.")
+            return
+        print(f"\n🏠 Families ({len(items)})")
+        for fname, rec in items:
+            print(f"  - {fname}: parent={rec.get('parent')}  children={', '.join(rec.get('children') or []) or '(none)'}")
+
+    def _dispatch_family(self, rest: str):
+        parts = (rest or "").split()
+        if not parts:
+            print("Usage: /family create <name> <parent_id>")
+            print("       /family add <name> <child_id>")
+            print("       /family show [name]")
+            return
+        if parts[0] == "create":
+            if len(parts) < 3:
+                print("Usage: /family create <name> <parent_id>")
+            else:
+                self.family_create(parts[1], parts[2])
+            return
+        if parts[0] == "add":
+            if len(parts) < 3:
+                print("Usage: /family add <name> <child_id>")
+            else:
+                self.family_add(parts[1], parts[2])
+            return
+        if parts[0] == "show":
+            self.family_show(parts[1] if len(parts) > 1 else None)
+            return
+        print("Usage: /family create|add|show ...")
 
     def list_academy(self):
         candidates = list(self.memory.get("academy_candidates") or [])
@@ -2833,6 +2925,12 @@ class QueenBee:
         dsm = haos_dsm_hook.admit_peer_message(self, message)
         if not dsm.get("allowed"):
             haos_dsm_hook.refuse_message(dsm)
+            return
+        import haos_family
+
+        ok, reason = haos_family.talk_pair_allowed(speaker, listener)
+        if not ok:
+            print(reason or "FAMILY_SLICE")
             return
         prior = self._prior_pair_context(speaker, listener)
         print(f"\n💬 Pair talk  {speaker.get('id')} → {listener.get('id')}")
@@ -4453,7 +4551,7 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
 
     def run(self):
         print("\nQueenBee ready (v7.1 ULTIMATE MAXIMUM POLISH). Type 'exit' or 'quit' to stop.")
-        print("Commands: /research <query> | /hrm <message> | /status | /save | /load | /ternary <check> | /spawn [--talk] [task] | /task [--talk] <id> <desc> | /pool | /train [--talk] <id> | /cycle <id> [n] [--talk] | /cycle cohort <name> [n] [--talk] | /sleep <id> | /wake <id> | /cohort ... | /talk [--talk] <from> <to> <msg> | /academy | /academy review <id> | /summary <id> | /experiences <id> [n] | /experiences status | /experiences prune | /memory loop <id> | /memory list | /harness | /harness ethics | /harness register | /harness experiences | /modules | /swarm | /export <id> [--to-node <node>] | /nursery | /usb ... | /farm status | /farm cycle [n] | /infants | /deactivate <id> | /promote <id> <reason> | /autoresearch status | /autoresearch [--talk] <id> [hypothesis]")
+        print("Commands: /research <query> | /hrm <message> | /status | /save | /load | /ternary <check> | /spawn [--talk] [task] | /task [--talk] <id> <desc> | /pool | /train [--talk] <id> | /cycle <id> [n] [--talk] | /cycle cohort <name> [n] [--talk] | /sleep <id> | /wake <id> | /cohort ... | /family create|add|show | /talk [--talk] <from> <to> <msg> | /academy | /academy review <id> | /summary <id> | /experiences <id> [n] | /experiences status | /experiences prune | /memory loop <id> | /memory list | /harness | /harness ethics | /harness register | /harness experiences | /modules | /swarm | /export <id> [--to-node <node>] | /nursery | /usb ... | /farm status | /farm cycle [n] | /infants | /deactivate <id> | /promote <id> <reason> | /autoresearch status | /autoresearch [--talk] <id> [hypothesis]")
         print("💡 Just type anything for normal HRM synergy!\n")
         
         while True:
@@ -4633,6 +4731,8 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
                     else:
                         print("Usage: /cohort create|add|remove|list|show ...")
                         print("   /cohort show <name> lists competence, node seat, academy rec, last talk.")
+                elif user_input == "/family" or user_input.startswith("/family "):
+                    self._dispatch_family(user_input[7:].strip())
                 elif user_input == "/talk" or user_input.startswith("/talk "):
                     self._dispatch_talk(user_input[5:].strip())
                 elif user_input == "/academy" or user_input.startswith("/academy "):
