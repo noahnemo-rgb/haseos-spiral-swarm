@@ -57,3 +57,6 @@ dsm_token*.json
 dsm_revocation.json
 dsm_cert*.json
 .haseos_keeper
+
+# Stray Ctrl-C terminal artifact — never stage
+^C
