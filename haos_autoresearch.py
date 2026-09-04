@@ -140,7 +140,29 @@ def apply_trial(
     if keep:
         infant[MUTABLE_SURFACE] = hypothesis
     infant["autoresearch_trials"].append(trial)
+    append_candidate_experience(infant, trial, outcome)
     return {"status": outcome, "trial": trial}
+
+
+def append_candidate_experience(infant: dict, trial: dict, status: str) -> dict[str, Any]:
+    """Candidate experience on keep/discard. Promotion stays HITL."""
+    infant.setdefault("experiences", [])
+    outcome = "keep" if status == "keep" else "discard"
+    delta = 1 if outcome == "keep" else 0
+    row = {
+        "type": "autoresearch",
+        "source": "/autoresearch",
+        "outcome": outcome,
+        "summary": f"autoresearch {outcome}",
+        "task": infant.get("task"),
+        "related": {"trial_id": trial.get("id")},
+        "competence_delta": delta,
+        "timestamp": _utc_now(),
+    }
+    infant["experiences"].append(row)
+    if outcome == "keep":
+        infant["competence_score"] = int(infant.get("competence_score") or 0) + 1
+    return row
 
 
 def last_trial_context(infant: dict | None) -> dict[str, Any] | None:

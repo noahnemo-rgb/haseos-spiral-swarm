@@ -186,6 +186,50 @@ class AutoresearchTrialTests(unittest.TestCase):
         format_autoresearch_status(infant)
         self.assertEqual(infant["task"], before)
 
+    def test_keep_writes_autoresearch_experience_delta_one(self):
+        infant = self._infant("old task")
+        result = apply_trial(infant, "observe localhost", judge_available=True)
+        self.assertEqual(result["status"], "keep")
+        row = infant["experiences"][-1]
+        self.assertEqual(row["type"], "autoresearch")
+        self.assertEqual(row["source"], "/autoresearch")
+        self.assertEqual(row["outcome"], "keep")
+        self.assertEqual(row["competence_delta"], 1)
+        self.assertEqual(row["related"]["trial_id"], result["trial"]["id"])
+        self.assertEqual(infant["competence_score"], 1)
+
+    def test_discard_writes_experience_delta_zero_task_unchanged(self):
+        infant = self._infant("observe localhost")
+        infant["competence_score"] = 3
+        result = apply_trial(infant, "insmod a helper", judge_available=True)
+        self.assertEqual(result["status"], "discard")
+        row = infant["experiences"][-1]
+        self.assertEqual(row["type"], "autoresearch")
+        self.assertEqual(row["outcome"], "discard")
+        self.assertEqual(row["competence_delta"], 0)
+        self.assertEqual(infant["task"], "observe localhost")
+        self.assertEqual(infant["competence_score"], 3)
+
+    def test_refuse_writes_no_experience_and_no_competence_change(self):
+        infant = self._infant()
+        infant["competence_score"] = 2
+        result = apply_trial(infant, "observe localhost", judge_available=False)
+        self.assertEqual(result["status"], "refuse")
+        self.assertNotIn("experiences", infant)
+        self.assertEqual(infant["competence_score"], 2)
+
+    def test_two_keeps_do_not_share_trial_id(self):
+        infant = self._infant("seed")
+        first = apply_trial(infant, "observe localhost", judge_available=True)
+        second = apply_trial(infant, "observe 127.0.0.1 status", judge_available=True)
+        self.assertEqual(first["status"], "keep")
+        self.assertEqual(second["status"], "keep")
+        id_a = infant["experiences"][-2]["related"]["trial_id"]
+        id_b = infant["experiences"][-1]["related"]["trial_id"]
+        self.assertNotEqual(id_a, id_b)
+        self.assertEqual(id_a, first["trial"]["id"])
+        self.assertEqual(id_b, second["trial"]["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

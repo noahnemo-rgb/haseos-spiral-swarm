@@ -1177,19 +1177,27 @@ class QueenBee:
             print("JUDGE_MISSING")
             return
         trial = result.get("trial") or {}
-        self._append_experience(
-            infant,
-            infant.get("task", ""),
-            f"autoresearch {status}",
-            exp_type="autoresearch",
-            source="/autoresearch",
-            outcome=str(status),
-            related={
-                "trial_id": trial.get("id"),
-                "judge_id": trial.get("judge_id"),
-            },
-            tags=["autoresearch", str(status)],
-        )
+        tid = trial.get("id")
+        rows = infant.get("experiences") or []
+        last = rows[-1] if rows else None
+        last_tid = None
+        if isinstance(last, dict) and isinstance(last.get("related"), dict):
+            last_tid = last["related"].get("trial_id")
+        if last_tid != tid:
+            self._append_experience(
+                infant,
+                infant.get("task", ""),
+                f"autoresearch {status}",
+                exp_type="autoresearch",
+                source="/autoresearch",
+                outcome=str(status),
+                related={
+                    "trial_id": tid,
+                    "judge_id": trial.get("judge_id"),
+                },
+                tags=["autoresearch", str(status)],
+            )
+        self.save_memory()
         print(f"   autoresearch {status} for {infant.get('id')}")
         print(f"   task: {infant.get('task')}")
         if talk:
