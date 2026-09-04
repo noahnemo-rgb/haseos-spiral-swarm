@@ -1140,7 +1140,7 @@ class QueenBee:
             print("No infants. Use /spawn, then /autoresearch <id> [hypothesis].")
             return
         print("\n🔎 Autoresearch trials (Memory Sovereignty)")
-        print("   Judge: haseos.dsm_ethics.v1  surface: task  Mouth /research is separate.")
+        print("   Judge: presence of DSM + ethical_kernel.v1  surface: task  Mouth /research is separate.")
         for infant in infants:
             rows = infant.get("autoresearch_trials") or []
             print(
@@ -1165,11 +1165,8 @@ class QueenBee:
         text = (hypothesis or "").strip() or str(infant.get("task") or "")
         try:
             import haos_autoresearch
-            import haos_dsm  # noqa: F401 — frozen judge must be importable
 
-            result = haos_autoresearch.apply_trial(
-                infant, text, judge_available=True
-            )
+            result = haos_autoresearch.apply_trial(infant, text)
         except Exception:
             print("JUDGE_MISSING")
             return

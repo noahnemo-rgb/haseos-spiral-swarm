@@ -8,10 +8,12 @@ import unittest
 
 from haos_autoresearch import (
     JUDGE_ID,
+    KERNEL_SCHEMA,
     MUTABLE_SURFACE,
     REASON_JUDGE_MISSING,
     SCHEMA,
     apply_trial,
+    judge_is_present,
     judge_trial,
     last_trial_context,
     remember_on_cycle,
@@ -128,6 +130,31 @@ class AutoresearchTrialTests(unittest.TestCase):
         self.assertIsNotNone(stamped)
         self.assertEqual(stamped["outcome"], "discard")
         self.assertEqual(infant["last_cycle_baseline"]["outcome"], "discard")
+        self.assertEqual(infant["task"], "observe localhost")
+
+    def test_judge_is_present_true_in_this_repo(self):
+        self.assertTrue(judge_is_present())
+        import spiral_harness
+
+        kernel = spiral_harness.ethical_kernel()
+        self.assertIsInstance(kernel, dict)
+        self.assertEqual(kernel.get("schema"), KERNEL_SCHEMA)
+
+    def test_apply_trial_default_none_uses_presence_keep_safe_hypothesis(self):
+        infant = self._infant("old task")
+        hyp = "observe localhost"
+        result = apply_trial(infant, hyp)
+        self.assertTrue(judge_is_present())
+        self.assertEqual(result["status"], "keep")
+        self.assertEqual(infant["task"], hyp)
+        self.assertEqual(len(infant["autoresearch_trials"]), 1)
+
+    def test_apply_trial_override_false_still_refuses(self):
+        infant = self._infant()
+        result = apply_trial(infant, "observe localhost", judge_available=False)
+        self.assertEqual(result["status"], "refuse")
+        self.assertEqual(result.get("reason"), REASON_JUDGE_MISSING)
+        self.assertNotIn("autoresearch_trials", infant)
         self.assertEqual(infant["task"], "observe localhost")
 
 

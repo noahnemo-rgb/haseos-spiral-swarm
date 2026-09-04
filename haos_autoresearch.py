@@ -18,9 +18,22 @@ from haos_dsm import DEFAULT_ALLOWED_HOSTS, extract_hosts, tool_is_forbidden
 
 SCHEMA = "haseos.autoresearch_trial.v1"
 JUDGE_ID = "haseos.dsm_ethics.v1"
+KERNEL_SCHEMA = "haseos.ethical_kernel.v1"
 MUTABLE_SURFACE = "task"
 REASON_JUDGE_MISSING = "JUDGE_MISSING"
 DEFAULT_BUDGET_CHARS = 400
+
+
+def judge_is_present() -> bool:
+    """True only when DSM imports and ethical_kernel schema is present."""
+    try:
+        import haos_dsm  # noqa: F401
+        import spiral_harness
+
+        kernel = spiral_harness.ethical_kernel()
+    except Exception:
+        return False
+    return isinstance(kernel, dict) and kernel.get("schema") == KERNEL_SCHEMA
 
 
 def _utc_now() -> str:
@@ -94,10 +107,15 @@ def judge_trial(hypothesis: str, judge_available: bool) -> dict[str, Any]:
 def apply_trial(
     infant: dict,
     hypothesis: str,
-    judge_available: bool = True,
+    judge_available: bool | None = None,
 ) -> dict[str, Any]:
-    """Refuse, keep, or discard. Writes trials only on keep/discard."""
-    judged = judge_trial(hypothesis, judge_available)
+    """Refuse, keep, or discard. Writes trials only on keep/discard.
+
+    ``judge_available is None`` uses ``judge_is_present()``.
+    Explicit True/False remains a test override.
+    """
+    present = judge_is_present() if judge_available is None else bool(judge_available)
+    judged = judge_trial(hypothesis, present)
     if not judged.get("ok"):
         return {
             "status": "refuse",
