@@ -18,6 +18,7 @@ from haos_autoresearch import (
     judge_trial,
     last_trial_context,
     remember_on_cycle,
+    restore_kept_surface,
 )
 
 
@@ -229,6 +230,38 @@ class AutoresearchTrialTests(unittest.TestCase):
         self.assertNotEqual(id_a, id_b)
         self.assertEqual(id_a, first["trial"]["id"])
         self.assertEqual(id_b, second["trial"]["id"])
+
+    def test_restore_kept_surface_puts_kept_hypothesis_back(self):
+        infant = self._infant("old task")
+        hyp = "observe localhost"
+        apply_trial(infant, hyp, judge_available=True)
+        infant["task"] = "pool-x"
+        ctx = restore_kept_surface(infant)
+        self.assertIsNotNone(ctx)
+        self.assertEqual(ctx["outcome"], "keep")
+        self.assertEqual(infant["task"], hyp)
+
+    def test_restore_after_discard_leaves_pool_overwrite(self):
+        infant = self._infant("observe localhost")
+        apply_trial(infant, "insmod a helper", judge_available=True)
+        infant["task"] = "pool-x"
+        ctx = restore_kept_surface(infant)
+        self.assertIsNone(ctx)
+        self.assertEqual(infant["task"], "pool-x")
+
+    def test_restore_empty_infant_is_none_and_does_not_create_task(self):
+        infant = {"id": "infant.empty"}
+        ctx = restore_kept_surface(infant)
+        self.assertIsNone(ctx)
+        self.assertNotIn("task", infant)
+
+    def test_restore_kept_surface_does_not_append_a_new_trial(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        before = len(infant["autoresearch_trials"])
+        infant["task"] = "pool-x"
+        restore_kept_surface(infant)
+        self.assertEqual(len(infant["autoresearch_trials"]), before)
 
 
 if __name__ == "__main__":

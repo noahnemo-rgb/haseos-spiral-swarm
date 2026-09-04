@@ -67,7 +67,7 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. D28 candidate experience writeback on keep/discard (refuse writes nothing; no auto-promote)
+1. D29 cycle preserves kept task (`restore_kept_surface`; discard still lets the pool change task)
 2. Later: software nursery + USB-state / phone-farm follow-ons
 3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 

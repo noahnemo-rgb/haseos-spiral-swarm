@@ -968,8 +968,10 @@ class QueenBee:
         try:
             import haos_autoresearch
 
-            baseline = haos_autoresearch.remember_on_cycle(infant)
+            ar = haos_autoresearch
+            baseline = ar.remember_on_cycle(infant)
         except Exception:
+            ar = None
             baseline = None
         if baseline:
             print(
@@ -985,6 +987,8 @@ class QueenBee:
                     print(f"   Turn {i}/{n}: stopped — infant is {infant.get('status')}")
                 break
             result = self._train_turn(infant, talk=talk, exp_type="cycle", source="/cycle")
+            if ar is not None:
+                ar.restore_kept_surface(infant)
             if baseline:
                 rows = infant.get("experiences") or []
                 if rows and isinstance(rows[-1], dict):

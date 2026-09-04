@@ -200,6 +200,15 @@ def remember_on_cycle(infant: dict) -> dict[str, Any] | None:
     return infant["last_cycle_baseline"]
 
 
+def restore_kept_surface(infant: dict) -> dict[str, Any] | None:
+    """Put a kept hypothesis back on infant[\"task\"]. No new trial. Discard is a no-op."""
+    ctx = last_trial_context(infant)
+    if ctx and ctx.get("outcome") == "keep" and ctx.get("hypothesis"):
+        infant["task"] = ctx["hypothesis"]
+        return ctx
+    return None
+
+
 def _format_trial_fields(row: dict[str, Any], *, label: str) -> str:
     return (
         f"{label}: "
