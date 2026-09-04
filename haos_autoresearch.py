@@ -176,3 +176,33 @@ def remember_on_cycle(infant: dict) -> dict[str, Any] | None:
         return None
     infant["last_cycle_baseline"] = dict(ctx)
     return infant["last_cycle_baseline"]
+
+
+def _format_trial_fields(row: dict[str, Any], *, label: str) -> str:
+    return (
+        f"{label}: "
+        f"id={row.get('trial_id')} "
+        f"outcome={row.get('outcome')} "
+        f"reason={row.get('reason')} "
+        f"hypothesis={row.get('hypothesis')} "
+        f"mutable_surface={row.get('mutable_surface')}"
+    )
+
+
+def format_autoresearch_status(infant: dict | None) -> str:
+    """Inspect-only last trial + cycle baseline. Never runs apply_trial."""
+    present = "true" if judge_is_present() else "false"
+    lines = [
+        f"judge: presence of DSM + ethical_kernel.v1 ({present})",
+    ]
+    if isinstance(infant, dict) and infant.get("id"):
+        lines.insert(0, f"infant: {infant.get('id')}")
+    ctx = last_trial_context(infant)
+    if ctx is None:
+        lines.append("last trial: no prior trial")
+    else:
+        lines.append(_format_trial_fields(ctx, label="last trial"))
+    baseline = infant.get("last_cycle_baseline") if isinstance(infant, dict) else None
+    if isinstance(baseline, dict) and baseline:
+        lines.append(_format_trial_fields(baseline, label="cycle baseline"))
+    return "\n".join(lines)

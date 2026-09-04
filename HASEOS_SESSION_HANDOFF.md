@@ -67,7 +67,7 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. D26 judge is presence (DSM importable + `ethical_kernel.v1`); not a caller boolean
+1. D27 `/autoresearch status` prints last trial + cycle baseline in full (inspect-only; no new trial)
 2. Later: software nursery + USB-state / phone-farm follow-ons
 3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 

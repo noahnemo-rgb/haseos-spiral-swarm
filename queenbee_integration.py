@@ -1140,7 +1140,11 @@ class QueenBee:
             print("No infants. Use /spawn, then /autoresearch <id> [hypothesis].")
             return
         print("\n🔎 Autoresearch trials (Memory Sovereignty)")
-        print("   Judge: presence of DSM + ethical_kernel.v1  surface: task  Mouth /research is separate.")
+        try:
+            import haos_autoresearch
+        except Exception:
+            print("JUDGE_MISSING")
+            return
         for infant in infants:
             rows = infant.get("autoresearch_trials") or []
             print(
@@ -1148,9 +1152,7 @@ class QueenBee:
                 f"seq={infant.get('autoresearch_seq', 0)}  "
                 f"task={infant.get('task')!r}"
             )
-            if rows:
-                last = rows[-1]
-                print(f"      last: {last.get('outcome')}  {last.get('id')}")
+            print(haos_autoresearch.format_autoresearch_status(infant))
 
     def run_autoresearch_trial(
         self,

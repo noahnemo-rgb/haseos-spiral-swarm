@@ -13,6 +13,7 @@ from haos_autoresearch import (
     REASON_JUDGE_MISSING,
     SCHEMA,
     apply_trial,
+    format_autoresearch_status,
     judge_is_present,
     judge_trial,
     last_trial_context,
@@ -156,6 +157,34 @@ class AutoresearchTrialTests(unittest.TestCase):
         self.assertEqual(result.get("reason"), REASON_JUDGE_MISSING)
         self.assertNotIn("autoresearch_trials", infant)
         self.assertEqual(infant["task"], "observe localhost")
+
+    def test_empty_infant_status_contains_no_prior_trial(self):
+        text = format_autoresearch_status(self._infant())
+        self.assertIn("no prior trial", text)
+        self.assertIn("presence of DSM + ethical_kernel.v1", text)
+
+    def test_status_after_keep_contains_keep_and_hypothesis(self):
+        infant = self._infant("old task")
+        hyp = "observe localhost"
+        apply_trial(infant, hyp, judge_available=True)
+        text = format_autoresearch_status(infant)
+        self.assertIn("keep", text)
+        self.assertIn(hyp, text)
+        self.assertIn("task", text)
+
+    def test_status_after_discard_contains_discard(self):
+        infant = self._infant("observe localhost")
+        apply_trial(infant, "insmod a helper", judge_available=True)
+        text = format_autoresearch_status(infant)
+        self.assertIn("discard", text)
+        self.assertNotIn("no prior trial", text)
+
+    def test_format_status_does_not_change_task(self):
+        infant = self._infant("hold this task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        before = infant["task"]
+        format_autoresearch_status(infant)
+        self.assertEqual(infant["task"], before)
 
 
 if __name__ == "__main__":
