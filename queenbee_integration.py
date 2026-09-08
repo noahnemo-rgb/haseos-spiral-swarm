@@ -1696,6 +1696,7 @@ class QueenBee:
         self._refresh_competence(infant)
         self._upgrade_experiences(infant)
         snapshot = copy.deepcopy(infant)
+        snapshot.update(usb_state.seal_sovereignty(snapshot))
         if not isinstance(snapshot.get("experiences"), list):
             snapshot["experiences"] = []
         history = snapshot.get("promotion_history")

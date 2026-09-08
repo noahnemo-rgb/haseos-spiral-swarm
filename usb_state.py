@@ -21,6 +21,17 @@ INFANT_SNAPSHOT_SCHEMA = "haseos.usb_infant.v1"
 MOUNT_STATUSES = {"mounted", "ejected", "offline"}
 MODES = {"memory", "file"}
 
+SOVEREIGNTY_KEYS = (
+    "task",
+    "experiences",
+    "autoresearch_trials",
+    "last_cycle_baseline",
+    "family_id",
+    "parent_id",
+    "family_role",
+    "competence_score",
+)
+
 REQUIRED_KEYS = (
     "schema_version",
     "node_id",
@@ -158,6 +169,24 @@ def to_dict(state: dict) -> dict:
     return copy.deepcopy(state)
 
 
+def seal_sovereignty(infant: dict) -> dict:
+    """Copy Memory Sovereignty fields when present. Do not invent trials or a family."""
+    sealed: dict = {}
+    if not isinstance(infant, dict):
+        return sealed
+    for key in SOVEREIGNTY_KEYS:
+        if key not in infant:
+            continue
+        value = infant[key]
+        if key in {"experiences", "autoresearch_trials"}:
+            sealed[key] = list(value) if isinstance(value, list) else copy.deepcopy(value)
+        elif isinstance(value, (dict, list)):
+            sealed[key] = copy.deepcopy(value)
+        else:
+            sealed[key] = value
+    return sealed
+
+
 def infant_memory_card(infant: dict) -> dict:
     """Lightweight inspect card for richer memory on a stored infant. No invented history."""
     if not isinstance(infant, dict):
@@ -172,6 +201,9 @@ def infant_memory_card(infant: dict) -> dict:
             "competence": None,
             "status": "?",
             "sleeping": False,
+            "trial_count": 0,
+            "last_trial_outcome": "",
+            "family_id": "",
         }
     experiences = infant.get("experiences")
     if not isinstance(experiences, list):
@@ -182,6 +214,12 @@ def infant_memory_card(infant: dict) -> dict:
     review = infant.get("last_academy_review")
     if not isinstance(review, dict):
         review = {}
+    trials = infant.get("autoresearch_trials")
+    if not isinstance(trials, list):
+        trials = []
+    last_outcome = ""
+    if trials and isinstance(trials[-1], dict):
+        last_outcome = trials[-1].get("outcome") or ""
     return {
         "id": infant.get("id"),
         "snapshot_schema": infant.get("usb_snapshot_schema") or infant.get("experience_schema") or "",
@@ -193,6 +231,9 @@ def infant_memory_card(infant: dict) -> dict:
         "competence": infant.get("competence_score"),
         "status": infant.get("status") or "?",
         "sleeping": infant.get("status") == "SLEEPING",
+        "trial_count": len(trials),
+        "last_trial_outcome": last_outcome,
+        "family_id": infant.get("family_id") or "",
     }
 
 
