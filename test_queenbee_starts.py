@@ -35,6 +35,33 @@ class QueenBeeStartsWithoutTorchTests(unittest.TestCase):
         self.assertTrue(hasattr(bee, "client"))
         self.assertTrue(bee.mouth_ok is False or bee.client is not None)
 
+    def test_classify_repl_line_exit_quit(self):
+        from queenbee_integration import classify_repl_line
+
+        self.assertEqual(classify_repl_line("exit"), "exit")
+        self.assertEqual(classify_repl_line("QUIT"), "exit")
+        self.assertEqual(classify_repl_line("  Exit  "), "exit")
+
+    def test_classify_repl_line_slash_is_command(self):
+        from queenbee_integration import classify_repl_line
+
+        self.assertEqual(classify_repl_line("/status"), "command")
+        self.assertEqual(classify_repl_line("/talk a b hi"), "command")
+        self.assertEqual(classify_repl_line("/family show"), "command")
+
+    def test_classify_repl_line_hrm(self):
+        from queenbee_integration import classify_repl_line
+
+        self.assertEqual(classify_repl_line("/hrm"), "hrm")
+        self.assertEqual(classify_repl_line("/hrm hello"), "hrm")
+
+    def test_classify_repl_line_free_text_is_help(self):
+        from queenbee_integration import classify_repl_line
+
+        self.assertEqual(classify_repl_line("hello"), "help")
+        self.assertEqual(classify_repl_line("Just type anything"), "help")
+        self.assertEqual(classify_repl_line(""), "help")
+
 
 if __name__ == "__main__":
     unittest.main()

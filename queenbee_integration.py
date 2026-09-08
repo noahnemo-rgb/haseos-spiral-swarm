@@ -65,6 +65,24 @@ def build_plain_infant(task: str | None = None) -> dict:
         "competence_score": 0,
     }
 
+
+def classify_repl_line(text: str) -> str:
+    """Classify a REPL line. HRM is a guest — free text is help, not synergy."""
+    line = (text or "").strip()
+    if line.lower() in {"exit", "quit"}:
+        return "exit"
+    if line.startswith("/hrm"):
+        return "hrm"
+    if line.startswith("/"):
+        return "command"
+    return "help"
+
+
+REPL_HELP = (
+    "Commands start with /.\n"
+    "HRM is a guest — type /hrm only if that guest is present."
+)
+
 # Lazy Software Nursery — created on first /usb, /nursery, or /farm command.
 # Software Nursery v0.1 is stable for the software phase.
 _NURSERY = None
@@ -4552,26 +4570,29 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
     def run(self):
         print("\nQueenBee ready (v7.1 ULTIMATE MAXIMUM POLISH). Type 'exit' or 'quit' to stop.")
         print("Commands: /research <query> | /hrm <message> | /status | /save | /load | /ternary <check> | /spawn [--talk] [task] | /task [--talk] <id> <desc> | /pool | /train [--talk] <id> | /cycle <id> [n] [--talk] | /cycle cohort <name> [n] [--talk] | /sleep <id> | /wake <id> | /cohort ... | /family create|add|show | /talk [--talk] <from> <to> <msg> | /academy | /academy review <id> | /summary <id> | /experiences <id> [n] | /experiences status | /experiences prune | /memory loop <id> | /memory list | /harness | /harness ethics | /harness register | /harness experiences | /modules | /swarm | /export <id> [--to-node <node>] | /nursery | /usb ... | /farm status | /farm cycle [n] | /infants | /deactivate <id> | /promote <id> <reason> | /autoresearch status | /autoresearch [--talk] <id> [hypothesis]")
-        print("💡 Just type anything for normal HRM synergy!\n")
+        print(REPL_HELP + "\n")
         
         while True:
             try:
                 user_input = input("\n🐝 > ").strip()
-                
-                if user_input.lower() in {"exit", "quit"}:
+                kind = classify_repl_line(user_input)
+
+                if kind == "exit":
                     self.deactivate_infants()
                     self.save_memory()
                     print("QueenBee shutting down — infants marked INACTIVE. Memory saved.")
                     break
-                
-                if user_input == "/autoresearch" or user_input.startswith("/autoresearch "):
+
+                if kind == "help":
+                    print(REPL_HELP)
+                elif kind == "hrm":
+                    msg = user_input[4:].strip()
+                    print(self.hrm_synergy(msg))
+                elif user_input == "/autoresearch" or user_input.startswith("/autoresearch "):
                     self._dispatch_autoresearch(user_input[13:].strip())
                 elif user_input.startswith("/research "):
                     query = user_input[10:].strip()
                     print(self.autoresearch(query))
-                elif user_input.startswith("/hrm "):
-                    msg = user_input[5:].strip()
-                    print(self.hrm_synergy(msg))
                 elif user_input == "/status":
                     print(f"\n📊 QueenBee Status Report")
                     print(f"   Inference: {self.client.base_url} ({self.client.model})")
@@ -4811,7 +4832,7 @@ Respond warmly, personally, and enthusiastically to Noah Nemo. Use emojis natura
                 elif user_input == "/farm" or user_input.startswith("/farm "):
                     self._dispatch_farm(user_input[5:].strip())
                 else:
-                    print(self.hrm_synergy(user_input))
+                    print(REPL_HELP)
                 
                 self.memory["history"].append({"input": user_input, "timestamp": datetime.now().isoformat()})
                 if len(self.memory["history"]) > 100:

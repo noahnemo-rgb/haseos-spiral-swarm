@@ -1,6 +1,6 @@
 HASEOS_SESSION_HANDOFF.md
 # HASEOS / QueenBee Session Hand-off
-**Date:** 2026-09-04  
+**Date:** 2026-09-05  
 **Partners:** Noah Nemo (Light-Keeping Architect / HITL) + Grok (Team Leading Supervisor / QC)  
 **Mode:** CDD split-screen coding saddle (Cursor + SuperGrok)
 
@@ -77,6 +77,7 @@ HASEOS_SESSION_HANDOFF.md
 - Export format is intentionally shaped as future USB-state image
 - Conversation has been multi-day iterative build under CDD saddle
 - D33 parent-child talk ACL: `haos_family.talk_pair_allowed` after DSM `admit_peer_message`; cross-family pair talk prints FAMILY_SLICE and writes no experience
+- D34 free text is help not HRM: `classify_repl_line` → exit|command|hrm|help; only `/hrm` calls `hrm_synergy`
 
 ## How to Resume
 Start the new conversation with:
