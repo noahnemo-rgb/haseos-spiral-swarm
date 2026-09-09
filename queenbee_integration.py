@@ -1146,6 +1146,9 @@ class QueenBee:
         if status != "ACTIVE":
             print(f"Infant {infant.get('id')} is {status}; only ACTIVE infants can sleep.")
             return
+        import haos_autoresearch
+
+        haos_autoresearch.stamp_sleep_after_trial(infant)
         seats = self._nodes_holding(infant.get("id"))
         infant["status"] = "SLEEPING"
         infant["sleep_time"] = datetime.now().isoformat()
@@ -1174,6 +1177,9 @@ class QueenBee:
         if infant.get("status") != "SLEEPING":
             print(f"Infant {infant.get('id')} is not SLEEPING (status={infant.get('status')}).")
             return
+        import haos_autoresearch
+
+        print(haos_autoresearch.format_wake_replay(infant))
         seats = self._nodes_holding(infant.get("id"))
         infant["status"] = "ACTIVE"
         infant["wake_time"] = datetime.now().isoformat()

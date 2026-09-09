@@ -30,6 +30,8 @@ SOVEREIGNTY_KEYS = (
     "parent_id",
     "family_role",
     "competence_score",
+    "slept_after_trial_id",
+    "slept_after_outcome",
 )
 
 REQUIRED_KEYS = (
@@ -204,6 +206,7 @@ def infant_memory_card(infant: dict) -> dict:
             "trial_count": 0,
             "last_trial_outcome": "",
             "family_id": "",
+            "last_sleep_trial_id": "",
         }
     experiences = infant.get("experiences")
     if not isinstance(experiences, list):
@@ -234,6 +237,7 @@ def infant_memory_card(infant: dict) -> dict:
         "trial_count": len(trials),
         "last_trial_outcome": last_outcome,
         "family_id": infant.get("family_id") or "",
+        "last_sleep_trial_id": infant.get("slept_after_trial_id") or "",
     }
 
 

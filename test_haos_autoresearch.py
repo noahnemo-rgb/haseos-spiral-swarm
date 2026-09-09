@@ -17,9 +17,11 @@ from haos_autoresearch import (
     format_autoresearch_status,
     judge_is_present,
     judge_trial,
+    format_wake_replay,
     last_trial_context,
     remember_on_cycle,
     restore_kept_surface,
+    stamp_sleep_after_trial,
 )
 
 
@@ -134,6 +136,42 @@ class AutoresearchTrialTests(unittest.TestCase):
         self.assertEqual(stamped["outcome"], "discard")
         self.assertEqual(infant["last_cycle_baseline"]["outcome"], "discard")
         self.assertEqual(infant["task"], "observe localhost")
+
+    def test_stamp_sleep_after_keep_does_not_change_task(self):
+        infant = self._infant("hold this task")
+        infant["competence_score"] = 4
+        apply_trial(infant, "observe localhost", judge_available=True)
+        task_before = infant["task"]
+        n_trials = len(infant["autoresearch_trials"])
+        score_before = infant["competence_score"]
+        ctx = stamp_sleep_after_trial(infant)
+        self.assertIsNotNone(ctx)
+        self.assertEqual(ctx["outcome"], "keep")
+        self.assertEqual(infant["task"], task_before)
+        self.assertEqual(infant["slept_after_outcome"], "keep")
+        self.assertEqual(
+            infant["slept_after_trial_id"], infant["autoresearch_trials"][-1]["id"]
+        )
+        self.assertEqual(len(infant["autoresearch_trials"]), n_trials)
+        self.assertEqual(infant["competence_score"], score_before)
+
+    def test_stamp_sleep_without_trials_is_none(self):
+        infant = self._infant()
+        self.assertIsNone(stamp_sleep_after_trial(infant))
+        self.assertNotIn("slept_after_trial_id", infant)
+        self.assertNotIn("slept_after_outcome", infant)
+        self.assertEqual(format_wake_replay(infant), "no prior trial to replay")
+
+    def test_wake_replay_after_discard_names_discard(self):
+        infant = self._infant("observe localhost")
+        apply_trial(infant, "insmod a helper", judge_available=True)
+        stamp_sleep_after_trial(infant)
+        text = format_wake_replay(infant)
+        self.assertIn("discard", text)
+        self.assertEqual(
+            text, f"slept on discard {infant['slept_after_trial_id']}"
+        )
+        self.assertEqual(infant["slept_after_outcome"], "discard")
 
     def test_judge_is_present_true_in_this_repo(self):
         self.assertTrue(judge_is_present())

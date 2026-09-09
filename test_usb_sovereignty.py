@@ -60,6 +60,22 @@ class UsbSovereigntyTests(unittest.TestCase):
         state = usb_state.create_empty("node-a")
         self.assertIs(state["airgap_enforced"], True)
 
+    def test_seal_copies_sleep_stamp(self):
+        infant = {
+            "id": "infant-1",
+            "task": "observe localhost",
+            "slept_after_trial_id": "t-keep-1",
+            "slept_after_outcome": "keep",
+        }
+        sealed = usb_state.seal_sovereignty(infant)
+        self.assertEqual(sealed["slept_after_trial_id"], "t-keep-1")
+        self.assertEqual(sealed["slept_after_outcome"], "keep")
+        card = usb_state.infant_memory_card(infant)
+        self.assertEqual(card["last_sleep_trial_id"], "t-keep-1")
+        bare = usb_state.seal_sovereignty({"id": "bare", "task": "observe localhost"})
+        self.assertNotIn("slept_after_trial_id", bare)
+        self.assertNotIn("slept_after_outcome", bare)
+
 
 if __name__ == "__main__":
     unittest.main()

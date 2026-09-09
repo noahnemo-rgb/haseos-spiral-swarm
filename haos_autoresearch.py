@@ -213,6 +213,32 @@ def remember_on_cycle(infant: dict) -> dict[str, Any] | None:
     return infant["last_cycle_baseline"]
 
 
+def stamp_sleep_after_trial(infant: dict) -> dict[str, Any] | None:
+    """Restate last trial on sleep. Does not run a trial. Does not change task."""
+    if not isinstance(infant, dict):
+        return None
+    ctx = last_trial_context(infant)
+    if ctx is None:
+        return None
+    outcome = ctx.get("outcome")
+    if outcome not in {"keep", "discard", "refuse"}:
+        return None
+    infant["slept_after_trial_id"] = ctx.get("trial_id")
+    infant["slept_after_outcome"] = outcome
+    return ctx
+
+
+def format_wake_replay(infant: dict | None) -> str:
+    """Printable sleep stamp. Does not clear it. No new trial."""
+    if not isinstance(infant, dict):
+        return "no prior trial to replay"
+    trial_id = infant.get("slept_after_trial_id")
+    outcome = infant.get("slept_after_outcome")
+    if trial_id and outcome:
+        return f"slept on {outcome} {trial_id}"
+    return "no prior trial to replay"
+
+
 def restore_kept_surface(infant: dict) -> dict[str, Any] | None:
     """Put a kept hypothesis back on infant[\"task\"]. No new trial. Discard is a no-op."""
     ctx = last_trial_context(infant)
