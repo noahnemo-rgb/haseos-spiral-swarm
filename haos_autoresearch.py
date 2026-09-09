@@ -11,6 +11,7 @@ Do not call QueenBee.autoresearch() — that is a Mouth log, not this trial.
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -202,6 +203,16 @@ def last_trial_context(infant: dict | None) -> dict[str, Any] | None:
         "hypothesis": trial.get("hypothesis"),
         "mutable_surface": trial.get("mutable_surface") or MUTABLE_SURFACE,
     }
+
+
+def trials_for_memory_loop(infant: dict | None) -> list:
+    """HITL /memory loop payload. Copy existing trials. Do not invent any."""
+    if not isinstance(infant, dict):
+        return []
+    rows = infant.get("autoresearch_trials")
+    if not isinstance(rows, list):
+        return []
+    return copy.deepcopy(rows)
 
 
 def remember_on_cycle(infant: dict) -> dict[str, Any] | None:

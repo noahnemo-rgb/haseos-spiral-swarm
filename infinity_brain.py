@@ -21,7 +21,8 @@ SCHEMA = "haseos.infinity_memory.v1"
 INDEX_SCHEMA = "haseos.infinity_index.v1"
 INDEX_NAME = "index.json"
 LOOPS_DIR = "loops"
-WHAT_CHOICES = ("experiences", "academy", "promotion", "all")
+WHAT_CHOICES = ("experiences", "academy", "promotion", "trials", "all")
+WHAT_SECTIONS = ("experiences", "academy", "promotion", "trials")
 NODE_KEYS = ("A", "B")
 
 load_env_file(ENV_FILE)
@@ -33,6 +34,16 @@ def node_paths() -> dict[str, str]:
         "A": (os.environ.get("INFINITY_BRAIN_NODE_A") or "").strip(),
         "B": (os.environ.get("INFINITY_BRAIN_NODE_B") or "").strip(),
     }
+
+
+def sections_for_what(what: str) -> set[str]:
+    """Which package sections a --what token includes. all includes trials."""
+    choice = (what or "all").strip().lower()
+    if choice not in WHAT_CHOICES:
+        raise ValueError("what must be experiences, academy, promotion, trials, or all")
+    if choice == "all":
+        return set(WHAT_SECTIONS)
+    return {choice}
 
 
 def parse_node_spec(spec: str | None) -> list[str]:
@@ -80,11 +91,21 @@ def package_content_bits(package: dict | None) -> dict:
         exp_count = 0
     academy = package.get("academy")
     promotion = package.get("promotion") or {}
+    trials = package.get("trials")
+    if isinstance(trials, dict):
+        trial_count = trials.get("count")
+        if trial_count is None:
+            trial_count = len(trials.get("autoresearch_trials") or [])
+    elif isinstance(trials, list):
+        trial_count = len(trials)
+    else:
+        trial_count = 0
     return {
         "experiences": int(exp_count or 0) if "experiences" in package else None,
         "academy": bool(academy) if "academy" in package else False,
         "promotion": bool(promotion) if "promotion" in package else False,
         "promotion_history": len(promotion.get("history") or []) if isinstance(promotion, dict) else 0,
+        "trials": int(trial_count or 0) if "trials" in package else None,
     }
 
 
@@ -98,6 +119,8 @@ def format_content_bits(bits: dict | None) -> str:
     if bits.get("promotion"):
         hist = bits.get("promotion_history") or 0
         parts.append(f"promo={hist}" if hist else "promo")
+    if bits.get("trials") is not None:
+        parts.append(f"trials={bits['trials']}")
     return " ".join(parts) if parts else "-"
 
 

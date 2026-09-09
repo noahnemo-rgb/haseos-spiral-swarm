@@ -2452,7 +2452,7 @@ class QueenBee:
         print("Usage: /memory config")
         print("       /memory list [--node A|B|both]")
         print("       /memory show [--node A|B] <file>")
-        print("       /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|all]")
+        print("       /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|trials|all]")
         print("   Sparse HITL path — one deliberate write per /memory loop.")
         print("   Default loop node is A; use --node both only when both mounts are intended.")
         print("   Never automatic. No background looping. Paths from infinity_brain.env only.")
@@ -2482,15 +2482,15 @@ class QueenBee:
         notes: str = "",
     ) -> dict:
         what = (what or "all").strip().lower()
-        if what not in infinity_brain.WHAT_CHOICES:
-            raise ValueError("what must be experiences, academy, promotion, or all")
+        sections = infinity_brain.sections_for_what(what)
         self._refresh_competence(infant)
         self._upgrade_experiences(infant)
         experience_bundle = self._experience_export_payload(infant)
         listing = self._academy_listing_for(infant.get("id")) or {}
-        include_exp = what in {"experiences", "all"}
-        include_academy = what in {"academy", "all"}
-        include_promo = what in {"promotion", "all"}
+        include_exp = "experiences" in sections
+        include_academy = "academy" in sections
+        include_promo = "promotion" in sections
+        include_trials = "trials" in sections
         package = {
             "schema": infinity_brain.SCHEMA,
             "packaged_at": datetime.now().isoformat(),
@@ -2524,6 +2524,10 @@ class QueenBee:
                 "promotion_reason": infant.get("promotion_reason"),
                 "history": infant.get("promotion_history") or [],
             }
+        if include_trials:
+            import haos_autoresearch
+
+            package["trials"] = haos_autoresearch.trials_for_memory_loop(infant)
         return package
 
     def _format_bytes(self, size: int) -> str:
@@ -2570,7 +2574,7 @@ class QueenBee:
             return
         what = (what or "all").strip().lower()
         if what not in infinity_brain.WHAT_CHOICES:
-            print("what must be experiences, academy, promotion, or all")
+            print("what must be experiences, academy, promotion, trials, or all")
             self._memory_help()
             return
         print(f"\n🧠 Memory loop  {infant.get('id')} → {','.join(targets)}  what={what}")
@@ -2730,10 +2734,10 @@ class QueenBee:
                     infant_id = token
                     i += 1
                     continue
-                print("Usage: /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|all]")
+                print("Usage: /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|trials|all]")
                 return
             if not infant_id:
-                print("Usage: /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|all]")
+                print("Usage: /memory loop <id> [--node A|B|both] [--what experiences|academy|promotion|trials|all]")
                 return
             self.memory_loop(infant_id, node_spec=node_spec, what=what, notes=notes)
             return

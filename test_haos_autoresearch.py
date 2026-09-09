@@ -25,6 +25,7 @@ from haos_autoresearch import (
     remember_on_cycle,
     restore_kept_surface,
     stamp_sleep_after_trial,
+    trials_for_memory_loop,
 )
 
 
@@ -212,6 +213,22 @@ class AutoresearchTrialTests(unittest.TestCase):
         self.assertFalse(keep_pending_replay(infant))
         mark_wake_replay(infant)
         self.assertFalse(keep_pending_replay(infant))
+
+    def test_trials_for_memory_loop_after_keep(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        packed = trials_for_memory_loop(infant)
+        self.assertEqual(len(packed), 1)
+        self.assertEqual(packed[0]["outcome"], "keep")
+        self.assertEqual(packed[0]["id"], infant["autoresearch_trials"][0]["id"])
+        packed.append({"id": "invented"})
+        self.assertEqual(len(infant["autoresearch_trials"]), 1)
+
+    def test_trials_for_memory_loop_bare_infant_is_empty_list(self):
+        infant = self._infant()
+        packed = trials_for_memory_loop(infant)
+        self.assertEqual(packed, [])
+        self.assertNotIn("autoresearch_trials", infant)
 
     def test_judge_is_present_true_in_this_repo(self):
         self.assertTrue(judge_is_present())
