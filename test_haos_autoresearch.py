@@ -18,7 +18,10 @@ from haos_autoresearch import (
     judge_is_present,
     judge_trial,
     format_wake_replay,
+    keep_pending_replay,
     last_trial_context,
+    mark_wake_replay,
+    pool_may_assign,
     remember_on_cycle,
     restore_kept_surface,
     stamp_sleep_after_trial,
@@ -172,6 +175,43 @@ class AutoresearchTrialTests(unittest.TestCase):
             text, f"slept on discard {infant['slept_after_trial_id']}"
         )
         self.assertEqual(infant["slept_after_outcome"], "discard")
+
+    def test_keep_pending_before_sleep_is_true(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        self.assertTrue(keep_pending_replay(infant))
+        self.assertFalse(pool_may_assign(infant))
+
+    def test_keep_pending_after_sleep_still_true_until_wake(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        stamp_sleep_after_trial(infant)
+        self.assertTrue(keep_pending_replay(infant))
+        self.assertFalse(pool_may_assign(infant))
+        self.assertNotEqual(
+            infant.get("woke_after_trial_id"), infant["slept_after_trial_id"]
+        )
+
+    def test_keep_pending_false_after_wake(self):
+        infant = self._infant("old task")
+        apply_trial(infant, "observe localhost", judge_available=True)
+        stamp_sleep_after_trial(infant)
+        mark_wake_replay(infant)
+        self.assertFalse(keep_pending_replay(infant))
+        self.assertTrue(pool_may_assign(infant))
+        self.assertEqual(
+            infant["woke_after_trial_id"], infant["slept_after_trial_id"]
+        )
+
+    def test_discard_never_pending(self):
+        infant = self._infant("observe localhost")
+        apply_trial(infant, "insmod a helper", judge_available=True)
+        self.assertFalse(keep_pending_replay(infant))
+        self.assertTrue(pool_may_assign(infant))
+        stamp_sleep_after_trial(infant)
+        self.assertFalse(keep_pending_replay(infant))
+        mark_wake_replay(infant)
+        self.assertFalse(keep_pending_replay(infant))
 
     def test_judge_is_present_true_in_this_repo(self):
         self.assertTrue(judge_is_present())

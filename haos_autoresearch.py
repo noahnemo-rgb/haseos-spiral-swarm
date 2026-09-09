@@ -239,6 +239,33 @@ def format_wake_replay(infant: dict | None) -> str:
     return "no prior trial to replay"
 
 
+def keep_pending_replay(infant: dict | None) -> bool:
+    """True while a keep has not yet been slept and woken. Discard is never pending."""
+    ctx = last_trial_context(infant)
+    if ctx is None or not isinstance(infant, dict):
+        return False
+    if ctx.get("outcome") != "keep":
+        return False
+    trial_id = ctx.get("trial_id")
+    if not trial_id:
+        return False
+    return infant.get("woke_after_trial_id") != trial_id
+
+
+def mark_wake_replay(infant: dict) -> None:
+    """Record that wake replayed the sleep stamp. Does not clear the stamp."""
+    if not isinstance(infant, dict):
+        return
+    slept = infant.get("slept_after_trial_id")
+    if slept:
+        infant["woke_after_trial_id"] = slept
+
+
+def pool_may_assign(infant: dict | None) -> bool:
+    """Pool/cycle/train may overwrite task only when a keep is not pending replay."""
+    return not keep_pending_replay(infant)
+
+
 def restore_kept_surface(infant: dict) -> dict[str, Any] | None:
     """Put a kept hypothesis back on infant[\"task\"]. No new trial. Discard is a no-op."""
     ctx = last_trial_context(infant)

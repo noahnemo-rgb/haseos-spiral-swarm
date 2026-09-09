@@ -986,6 +986,23 @@ class QueenBee:
         source: str = "/train",
     ) -> dict:
         infant.setdefault("sandbox_tier", "nursery")
+        try:
+            import haos_autoresearch
+
+            may_assign = haos_autoresearch.pool_may_assign(infant)
+        except Exception:
+            may_assign = True
+        if not may_assign:
+            print("KEEP_PENDING_REPLAY")
+            return {
+                "task": {
+                    "id": infant.get("last_pool_task_id") or "-",
+                    "description": infant.get("task") or "",
+                    "difficulty": "",
+                },
+                "replied": False,
+                "held": True,
+            }
         pool_task = select_task(infant.get("sandbox_tier"))
         description = pool_task["description"]
         infant["task"] = description
@@ -1042,6 +1059,8 @@ class QueenBee:
             )
         else:
             print("   last trial: no prior trial")
+        if ar is not None and not ar.pool_may_assign(infant):
+            print("KEEP_PENDING_REPLAY")
         if verbose:
             print(f"🔄 Cycle {infant.get('id')}: {n} turn(s), talk={'on' if talk else 'off'}")
         for i in range(1, n + 1):
@@ -1179,6 +1198,7 @@ class QueenBee:
             return
         import haos_autoresearch
 
+        haos_autoresearch.mark_wake_replay(infant)
         print(haos_autoresearch.format_wake_replay(infant))
         seats = self._nodes_holding(infant.get("id"))
         infant["status"] = "ACTIVE"

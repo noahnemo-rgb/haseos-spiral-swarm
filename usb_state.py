@@ -32,6 +32,7 @@ SOVEREIGNTY_KEYS = (
     "competence_score",
     "slept_after_trial_id",
     "slept_after_outcome",
+    "woke_after_trial_id",
 )
 
 REQUIRED_KEYS = (

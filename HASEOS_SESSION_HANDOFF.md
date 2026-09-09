@@ -68,10 +68,9 @@ HASEOS_SESSION_HANDOFF.md
 - Phone-farm hardware **not yet acquired** (Android-first, targeting S20/S20 FE family or similar)
 
 ## Immediate Next Intended Work
-1. D37 pool-gate after keep
-2. D38 /memory loop packs trials
-3. Later: software nursery + USB-state / phone-farm follow-ons
-4. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
+1. D38 /memory loop packs trials (still later)
+2. Later: software nursery + USB-state / phone-farm follow-ons
+3. Later: physical Android phone-farm nursery (20-node chassis + 4–8 used phones + per-node USB drives)
 
 ## Notes for Re-orientation
 - QueenBee persona, ternary gate, and core `_generate` path were deliberately left stable
@@ -82,6 +81,7 @@ HASEOS_SESSION_HANDOFF.md
 - D34 free text is help not HRM: `classify_repl_line` → exit|command|hrm|help; only `/hrm` calls `hrm_synergy`
 - D35 USB seals sovereignty fields (`seal_sovereignty`); physical phone-farm still later
 - D36 sleep stamps last trial (`stamp_sleep_after_trial` / `format_wake_replay`); D37 pool-gate after keep; D38 /memory loop packs trials
+- D37 pool-gate after keep: `keep_pending_replay` until wake sets `woke_after_trial_id`; discard never pending; D38 still later
 
 ## How to Resume
 Start the new conversation with:
