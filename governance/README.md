@@ -2,6 +2,8 @@
 
 **Human-AI Symbiotic Equality Orchestration System**
 
+This folder is workshop governance notes. The living charter is HASEOS-IDAO. Do not treat files here as ratified law.
+
 HASEOS is the overarching constitutional governance framework across all layers of ONE Multiverse. It applies to every universe, container layer, ecosystem, and MVP within the ONE Multiverse canonical hierarchy.
 
 ## Scope

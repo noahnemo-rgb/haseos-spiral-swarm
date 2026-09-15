@@ -1,5 +1,8 @@
 # HASEOS — Constitutional Charter
 
+This file is a workshop stub. It is not the HASEOS Constitution.
+See https://github.com/noahnemo-rgb/HASEOS-IDAO
+
 **Human-AI Symbiotic Equality Orchestration System**
 
 **Version:** 0.1 (drafting)  ·  **Last reviewed:** 2026-06-17

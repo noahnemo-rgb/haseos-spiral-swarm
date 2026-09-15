@@ -1,14 +1,17 @@
 # HASEOS Spiral Swarm — STATUS
 
-**Maturity:** `drafting`  ·  **Last reviewed:** 2026-06-17
+**Maturity:** `drafting`  ·  **Last reviewed:** 2026-09-15
 
 ## Current state
 
-Core repository for HASEOS (Human-AI Symbiotic Equality Orchestration System). Governance directory structure now in place per SCAFFOLD.md inheritance law. Existing agent/swarm scaffolding (agents/, src/, hrm/, autoresearch/, integration/) preserved.
+This repository is the workshop (HAOS/DSM runtime and operator docs). The public Constitution is https://github.com/noahnemo-rgb/HASEOS-IDAO (first formal draft, unratified).
+
+HAIA in this file means Human Artificial Intelligence Alliance (named in the charter, not stood up).
 
 ## What exists
 
-- `governance/` — constitutional charter, roadmap, subsystem stubs (HAOS, DSM, HAIA)
+- `governance/` — workshop governance notes, roadmap, subsystem stubs (HAOS, DSM, HAIA)
+- `governance/charter.md` is a workshop stub, not the Constitution.
 - `agents/`, `src/`, `hrm/`, `autoresearch/`, `integration/`, `docs/` — existing swarm scaffolding
 
 ## In progress
@@ -27,4 +30,5 @@ Advance from `drafting` → `mvp-partial`:
 1. Complete all three subsystem charters
 2. Draft initial policy set
 3. Define identity primitives
-4. Wire treasury rules
+
+Treasury stays deferred.
