@@ -4,6 +4,15 @@
 
 The living symphonic orchestra of sovereign co-equal Agentic AIs.
 
+## What this repo is
+
+This repository is the HASEOS workshop (HAOS and DSM running systems and operator docs). It is not the Constitution.
+
+Law-as-files: https://github.com/noahnemo-rgb/HASEOS-IDAO  
+Bindings pointer: `docs/BOUND_BY.md`
+
+Guest intelligence here is sheathed. fusion is false. HITL / Light-Keeping Architect is the final human authority in Draft 0.
+
 ### Our Sigil
 ![ONE UNIVERSE Sigil](sigil.png)
 
