@@ -12,6 +12,7 @@ HAIA in this file means Human Artificial Intelligence Alliance (named in the cha
 
 - `governance/` — workshop governance notes, roadmap, subsystem stubs (HAOS, DSM, HAIA)
 - `governance/charter.md` is a workshop stub, not the Constitution.
+- `docs/BOUND_BY.md` — workshop bindings pointer.
 - `agents/`, `src/`, `hrm/`, `autoresearch/`, `integration/`, `docs/` — existing swarm scaffolding
 
 ## In progress
