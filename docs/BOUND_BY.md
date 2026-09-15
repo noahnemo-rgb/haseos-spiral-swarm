@@ -20,3 +20,5 @@ Law-as-files lives at https://github.com/noahnemo-rgb/HASEOS-IDAO — Article VI
 `docs/HASEOS_SPIRAL_HARNESS_AND_NATIVE_CAPABILITY_CONTRACT.md` is a working chapter for capabilities, not the Constitution.
 
 Status: workshop language. Not ratification.
+
+Measures that would show these bindings are listed in `docs/METRICS.md`. Nothing here collects them.
