@@ -14,6 +14,7 @@ HAIA in this file means Human Artificial Intelligence Alliance (named in the cha
 - `governance/charter.md` is a workshop stub, not the Constitution.
 - `docs/BOUND_BY.md` — workshop bindings pointer.
 - README states this repo is the workshop, not the Constitution.
+- harness contract banner points at HASEOS-IDAO.
 - `agents/`, `src/`, `hrm/`, `autoresearch/`, `integration/`, `docs/` — existing swarm scaffolding
 
 ## In progress
